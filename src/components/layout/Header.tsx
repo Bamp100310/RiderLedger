@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useAppData } from '../../context/AppDataContext';
 import {
-  Search,
   Sun,
   Moon,
   Wifi,
@@ -9,10 +8,11 @@ import {
   RefreshCw,
   Bell,
   Menu,
-  X,
-  CreditCard
+  User,
+  Users,
+  ChevronDown
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 interface HeaderProps {
   onToggleMobileMenu: () => void;
@@ -20,93 +20,130 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
   const {
-    filter,
-    setFilterRange,
     theme,
     toggleTheme,
     isOnline,
     isSyncing,
-    pendingSyncCount,
     triggerSync,
     creditAnalysis,
-    requestNotificationPermission
+    activeUser,
+    users,
+    switchUser
   } = useAppData();
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const location = useLocation();
 
-  const filterTabs = [
-    { id: 'hoy' as const, label: 'Hoy' },
-    { id: 'semana' as const, label: 'Esta Semana' },
-    { id: 'mes' as const, label: 'Este Mes' },
-    { id: 'historico' as const, label: 'Histórico' }
-  ];
+  // Título contextual según la ruta
+  const getPageTitle = () => {
+    switch (location.pathname) {
+      case '/':
+        return 'Panel Principal';
+      case '/reportes':
+        return 'Consolidado Contable';
+      case '/creditos':
+        return 'Créditos & Cuotas (10 y 30)';
+      case '/turnos':
+        return 'Jornadas y Odómetro';
+      case '/movimientos':
+        return 'Libro de Movimientos';
+      case '/ajustes':
+        return 'Configuración & Supabase';
+      default:
+        return 'RiderLedger';
+    }
+  };
 
   return (
-    <header className="sticky top-0 z-30 w-full bg-[#1e2638] text-white px-4 py-2.5 border-b border-white/10 flex items-center justify-between gap-3 shadow-md">
-      {/* Botón Menú Móvil & Logo Móvil */}
+    <header className="sticky top-0 z-30 w-full bg-[#1e2638] text-white px-3 sm:px-5 py-3 border-b border-white/10 flex items-center justify-between gap-3 shadow-md select-none">
+      {/* Lado Izquierdo: Botón Menú Móvil + Título Contextual */}
       <div className="flex items-center gap-3">
         <button
           onClick={onToggleMobileMenu}
-          className="lg:hidden p-2 rounded-xl bg-slate-800 text-slate-200 hover:text-white"
+          className="lg:hidden p-2 rounded-xl bg-slate-800 text-slate-200 hover:text-white transition-colors"
           aria-label="Abrir menú"
         >
           <Menu className="w-5 h-5" />
         </button>
 
-        <Link to="/" className="lg:hidden flex items-center gap-2">
-          <span className="font-black text-sm tracking-wider uppercase text-white">
-            RiderLedger
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-sm sm:text-base font-black tracking-tight text-white">
+            {getPageTitle()}
+          </h1>
+          <span className="hidden sm:inline-block text-[10px] text-cyan-400 font-bold uppercase tracking-wider">
+            | Cuenta: {activeUser.nombre}
           </span>
-          <span className="text-[9px] font-bold px-1.5 py-0.2 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-full">
-            PRO
-          </span>
-        </Link>
-      </div>
-
-      {/* Barra de Búsqueda (Estilo Maqueta Referencia) */}
-      <div className="hidden md:flex items-center flex-1 max-w-xs">
-        <div className="relative w-full">
-          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-          <input
-            type="text"
-            placeholder="Buscar pedido, gasto o turno..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-900/90 border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder:text-slate-400 focus:outline-none focus:border-cyan-500 transition-colors"
-          />
         </div>
       </div>
 
-      {/* Subnav / Píldoras de Rango (Estilo Maqueta: Lorem Ipsum | Dolor Sit | Amet Conse) */}
-      <div className="hidden sm:flex items-center gap-1 text-xs">
-        {filterTabs.map(tab => {
-          const isActive = filter.range === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setFilterRange(tab.id)}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
-                isActive
-                  ? 'bg-cyan-500 text-white shadow-sm shadow-cyan-500/30'
-                  : 'text-slate-300 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Acciones de Cabecera: Modo Claro/Oscuro, Notificaciones y Sincronización */}
+      {/* Lado Derecho: Selector de Usuario Familiar, Tema Claro/Oscuro, Alertas y Sync */}
       <div className="flex items-center gap-2">
+        {/* Selector Rápido de Miembro Familiar */}
+        <div className="relative">
+          <button
+            onClick={() => setShowUserDropdown(!showUserDropdown)}
+            className="flex items-center gap-1.5 py-1.5 px-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-750 border border-white/10 text-xs font-bold transition-all"
+            title="Cambiar de usuario familiar"
+          >
+            <div
+              className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] text-white font-black"
+              style={{ backgroundColor: activeUser.avatarColor }}
+            >
+              {activeUser.nombre.charAt(0)}
+            </div>
+            <span className="hidden md:inline max-w-[100px] truncate text-slate-200">
+              {activeUser.nombre}
+            </span>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+          </button>
+
+          {/* Menú Desplegable de Usuarios Familiares */}
+          {showUserDropdown && (
+            <div className="absolute right-0 top-full mt-2 w-52 bg-slate-900 border border-white/15 rounded-2xl shadow-2xl p-2 z-50 animate-fade-in">
+              <div className="px-2 py-1.5 border-b border-white/10 mb-1 text-[11px] font-bold text-slate-400 flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Cuentas Familiares</span>
+              </div>
+              <div className="space-y-1">
+                {users.map(u => (
+                  <button
+                    key={u.id}
+                    onClick={() => {
+                      switchUser(u.id);
+                      setShowUserDropdown(false);
+                    }}
+                    className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-semibold text-left transition-colors ${
+                      u.id === activeUser.id
+                        ? 'bg-cyan-500 text-white font-bold'
+                        : 'text-slate-300 hover:bg-white/5'
+                    }`}
+                  >
+                    <div
+                      className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] text-white font-black flex-shrink-0"
+                      style={{ backgroundColor: u.avatarColor }}
+                    >
+                      {u.nombre.charAt(0)}
+                    </div>
+                    <span className="truncate">{u.nombre}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="pt-2 border-t border-white/10 mt-1">
+                <Link
+                  to="/ajustes"
+                  onClick={() => setShowUserDropdown(false)}
+                  className="w-full block text-center py-1.5 text-[11px] font-bold text-cyan-400 hover:text-cyan-300"
+                >
+                  Gestionar perfiles en Ajustes →
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Notificación de Cuotas del 10 y 30 */}
         <Link
           to="/creditos"
-          onClick={() => {
-            if ('Notification' in window && Notification.permission !== 'granted') {
-              requestNotificationPermission();
-            }
-          }}
           className={`p-2 rounded-xl border transition-all relative ${
             creditAnalysis.alertaVencimientoCercano
               ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 animate-pulse'

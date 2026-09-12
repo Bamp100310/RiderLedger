@@ -8,21 +8,20 @@ interface AppIncomeFormProps {
   onSuccess?: () => void;
 }
 
-// Plataformas solicitadas: Rappi, Didi Food, Mensajeros Urbanos, Armi, Farmatodo (FarmaEnvíos), Directo
-const APPS = [
-  { name: 'Rappi', icon: '🟠', desc: 'Rappi Domicilios' },
-  { name: 'Didi Food', icon: '🟡', desc: 'Didi Food' },
-  { name: 'Mensajeros Urbanos', icon: '🔴', desc: 'Mensajeros Urbanos' },
-  { name: 'Armi', icon: '🟢', desc: 'Armi Entregas' },
-  { name: 'Farmatodo (FarmaEnvíos)', icon: '🔵', desc: 'Farmatodo Envíos' },
-  { name: 'Directo / Particular', icon: '🟣', desc: 'Mensajería directa' }
-];
-
 export const AppIncomeForm: React.FC<AppIncomeFormProps> = ({ onSuccess }) => {
-  const { addTransaction, shifts } = useAppData();
+  const { addTransaction, shifts, activeDeliveryApps } = useAppData();
 
-  const [fecha, setFecha] = useState(getLocalDateString());
-  const [selectedApp, setSelectedApp] = useState('Rappi');
+  const deliveryApps = activeDeliveryApps.length > 0
+    ? activeDeliveryApps
+    : [
+        { id: '1', nombre: 'Rappi', icono: '🟠', color: '#f97316' },
+        { id: '2', nombre: 'Didi Food', icono: '🟡', color: '#eab308' },
+        { id: '3', nombre: 'Mensajeros Urbanos', icono: '🔴', color: '#ef4444' },
+        { id: '4', nombre: 'Armi', icono: '🔵', color: '#0284c7' }
+      ];
+
+  const [fecha] = useState(getLocalDateString());
+  const [selectedApp, setSelectedApp] = useState(deliveryApps[0]?.nombre || 'Rappi');
   const [tarifa, setTarifa] = useState('');
   const [propina, setPropina] = useState('');
   const [cobroEfectivo, setCobroEfectivo] = useState(false);
@@ -53,7 +52,7 @@ export const AppIncomeForm: React.FC<AppIncomeFormProps> = ({ onSuccess }) => {
           tipo: 'INGRESO',
           categoria: 'DOMICILIOS',
           subcategoria: selectedApp,
-          descripcion: `Entrega ${selectedApp}${numPropina > 0 ? ` (Tarifa: ${formatCurrency(numTarifa)} + Propina: ${formatCurrency(numPropina)})` : ''}`,
+          descripcion: `Entrega ${selectedApp}`,
           monto: totalIngresoApp,
           medio_pago: 'APP',
           shift_id: todayShift ? todayShift.id : null
@@ -66,7 +65,7 @@ export const AppIncomeForm: React.FC<AppIncomeFormProps> = ({ onSuccess }) => {
           tipo: 'COBRO_EFECTIVO_APP',
           categoria: 'DOMICILIOS',
           subcategoria: selectedApp,
-          descripcion: `Cobro en mano pedido cliente (${selectedApp})`,
+          descripcion: `Cobro efectivo pedido ${selectedApp}`,
           monto: numCobroEfectivo,
           medio_pago: 'EFECTIVO',
           shift_id: todayShift ? todayShift.id : null
@@ -75,7 +74,7 @@ export const AppIncomeForm: React.FC<AppIncomeFormProps> = ({ onSuccess }) => {
 
       try {
         confetti({
-          particleCount: 35,
+          particleCount: 30,
           spread: 50,
           origin: { y: 0.8 }
         });
@@ -91,27 +90,27 @@ export const AppIncomeForm: React.FC<AppIncomeFormProps> = ({ onSuccess }) => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Selector de Plataforma */}
+      {/* Selector Dinámico de Apps de Domicilio */}
       <div>
-        <label className="block text-xs font-semibold text-slate-400 dark:text-slate-400 mb-2">
-          Selecciona la Plataforma
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
+          Plataforma de Entrega
         </label>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {APPS.map(app => {
-            const isSelected = selectedApp === app.name;
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {deliveryApps.map(app => {
+            const isSelected = selectedApp === app.nombre;
             return (
               <button
-                key={app.name}
+                key={app.id || app.nombre}
                 type="button"
-                onClick={() => setSelectedApp(app.name)}
+                onClick={() => setSelectedApp(app.nombre)}
                 className={`flex items-center gap-2 p-2.5 rounded-xl text-xs font-bold transition-all border text-left ${
                   isSelected
                     ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-cyan-500 shadow-sm'
                     : 'bg-slate-100 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/5 hover:bg-slate-200 dark:hover:bg-slate-800'
                 }`}
               >
-                <span className="text-base">{app.icon}</span>
-                <span className="truncate leading-tight">{app.name}</span>
+                <span className="text-base">{app.icono || '🛵'}</span>
+                <span className="truncate">{app.nombre}</span>
               </button>
             );
           })}
@@ -122,7 +121,7 @@ export const AppIncomeForm: React.FC<AppIncomeFormProps> = ({ onSuccess }) => {
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-            Tarifa de Envío ($)
+            Tarifa del Pedido ($)
           </label>
           <div className="relative">
             <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">$</span>
@@ -141,7 +140,7 @@ export const AppIncomeForm: React.FC<AppIncomeFormProps> = ({ onSuccess }) => {
 
         <div>
           <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-            Propina ($ opcional)
+            Propina en App ($)
           </label>
           <div className="relative">
             <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">$</span>
@@ -165,7 +164,7 @@ export const AppIncomeForm: React.FC<AppIncomeFormProps> = ({ onSuccess }) => {
             <Wallet className="w-4 h-4 text-amber-500 dark:text-amber-400" />
             <div>
               <p className="text-xs font-bold text-slate-800 dark:text-white">¿Cobraste pedido en efectivo?</p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400">Dinero entregado en mano por el cliente</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">Dinero entregado por el cliente</p>
             </div>
           </div>
           <button
@@ -204,7 +203,7 @@ export const AppIncomeForm: React.FC<AppIncomeFormProps> = ({ onSuccess }) => {
             <p className="text-[10px] text-amber-600 dark:text-amber-300/90 flex items-start gap-1">
               <AlertTriangle className="w-3 h-3 flex-shrink-0 mt-0.5 text-amber-500" />
               <span>
-                Este dinero va a tu <b>bolsillo físico (+ Efectivo)</b>, pero aumenta tu deuda con la plataforma <b>(- Saldo App)</b>.
+                Entra a tu <b>bolsillo físico (+ Efectivo)</b>, pero crea deuda con la app <b>(- Saldo App)</b>.
               </span>
             </p>
           </div>
@@ -220,12 +219,12 @@ export const AppIncomeForm: React.FC<AppIncomeFormProps> = ({ onSuccess }) => {
           </div>
           {numCobroEfectivo > 0 && (
             <div className="flex justify-between">
-              <span className="text-slate-500 dark:text-slate-400">Cobro Efectivo Cliente:</span>
+              <span className="text-slate-500 dark:text-slate-400">Cobro en Efectivo:</span>
               <span className="font-bold text-amber-600 dark:text-amber-400">+{formatCurrency(numCobroEfectivo)} (en mano)</span>
             </div>
           )}
           <div className="pt-1 border-t border-slate-200 dark:border-white/10 flex justify-between font-bold">
-            <span className="text-slate-700 dark:text-slate-300">Impacto en Saldo App:</span>
+            <span className="text-slate-700 dark:text-slate-300">Impacto Saldo App:</span>
             <span className={impactoSaldoApp >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
               {impactoSaldoApp >= 0 ? `+${formatCurrency(impactoSaldoApp)} a favor` : `${formatCurrency(impactoSaldoApp)} a deber`}
             </span>
@@ -240,7 +239,7 @@ export const AppIncomeForm: React.FC<AppIncomeFormProps> = ({ onSuccess }) => {
         className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-white font-bold text-sm shadow-md shadow-cyan-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
       >
         <Check className="w-4 h-4 stroke-[3]" />
-        {isSubmitting ? 'Registrando...' : `Registrar en ${selectedApp}`}
+        {isSubmitting ? 'Guardando...' : `Registrar en ${selectedApp}`}
       </button>
     </form>
   );

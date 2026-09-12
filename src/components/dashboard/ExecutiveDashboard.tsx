@@ -26,6 +26,8 @@ import {
   Cell
 } from 'recharts';
 
+import { TimeRangeFilter } from './TimeRangeFilter';
+
 export const ExecutiveDashboard: React.FC = () => {
   const { summary, creditAnalysis, filteredTransactions, openDrawer } = useAppData();
 
@@ -60,6 +62,8 @@ export const ExecutiveDashboard: React.FC = () => {
 
   return (
     <div className="space-y-4 max-w-7xl mx-auto">
+      {/* Filtro de Rango Temporal contextual del Dashboard */}
+      <TimeRangeFilter />
       {/* Alerta de Cuota si es día de pago o falta poco */}
       {creditAnalysis.alertaVencimientoCercano && (
         <div

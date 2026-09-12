@@ -1,42 +1,32 @@
 import React, { useState } from 'react';
 import { useAppData } from '../../context/AppDataContext';
 import { getLocalDateString } from '../../lib/calculations';
-import { Users, Package, Check } from 'lucide-react';
+import { Check } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface OtherIncomeFormProps {
   onSuccess?: () => void;
 }
 
-// Pasajeros actualizados: Yango Pro, InDrive Moto, Uber Pasajeros, Particular
-const CATEGORIES = [
-  {
-    id: 'PASAJEROS',
-    label: 'Pasajeros (Moto)',
-    icon: Users,
-    subcategories: ['Yango Pro', 'InDrive Moto', 'Uber Pasajeros', 'Particular']
-  },
-  {
-    id: 'OTROS_INGRESOS',
-    label: 'Encomiendas / Otros',
-    icon: Package,
-    subcategories: ['Encomienda Directa', 'Mensajería Express', 'Otro Trabajo']
-  }
-];
-
 export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) => {
-  const { addTransaction, shifts } = useAppData();
+  const { addTransaction, shifts, activePassengerApps } = useAppData();
 
-  const [fecha, setFecha] = useState(getLocalDateString());
-  const [categoria, setCategoria] = useState(CATEGORIES[0].id);
-  const [subcategoria, setSubcategoria] = useState(CATEGORIES[0].subcategories[0]);
+  const passengerApps = activePassengerApps.length > 0
+    ? activePassengerApps
+    : [
+        { id: '1', nombre: 'Yango Pro', color: '#f43f5e' },
+        { id: '2', nombre: 'InDrive Moto', color: '#10b981' },
+        { id: '3', nombre: 'Uber Pasajeros', color: '#06b6d4' },
+        { id: '4', nombre: 'Particular', color: '#8b5cf6' }
+      ];
+
+  const [fecha] = useState(getLocalDateString());
+  const [selectedSubcat, setSelectedSubcat] = useState(passengerApps[0]?.nombre || 'Yango Pro');
   const [monto, setMonto] = useState('');
-  const [medioPago, setMedioPago] = useState<'EFECTIVO' | 'TRANSFERENCIA_BANCO' | 'APP'>('EFECTIVO');
-  const [descripcion, setDescripcion] = useState('');
+  const [medioPago, setMedioPago] = useState<'EFECTIVO' | 'BRE_B' | 'APP'>('EFECTIVO');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const todayShift = shifts.find(s => s.fecha === fecha);
-  const activeCategoryObj = CATEGORIES.find(c => c.id === categoria) || CATEGORIES[0];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,9 +41,9 @@ export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) =
       await addTransaction({
         fecha,
         tipo: 'INGRESO',
-        categoria,
-        subcategoria,
-        descripcion: descripcion.trim() || `${subcategoria}`,
+        categoria: 'PASAJEROS',
+        subcategoria: selectedSubcat,
+        descripcion: `Viaje ${selectedSubcat}`,
         monto: numMonto,
         medio_pago: medioPago,
         shift_id: todayShift ? todayShift.id : null
@@ -61,8 +51,8 @@ export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) =
 
       try {
         confetti({
-          particleCount: 30,
-          spread: 50,
+          particleCount: 25,
+          spread: 45,
           origin: { y: 0.8 }
         });
       } catch {}
@@ -77,57 +67,29 @@ export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) =
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Selector de Tipo de Trabajo */}
+      {/* Selector Dinámico de Pasajeros */}
       <div>
-        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
-          Tipo de Ingreso
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
+          Plataforma de Pasajeros / Servicio
         </label>
         <div className="grid grid-cols-2 gap-2">
-          {CATEGORIES.map(cat => {
-            const Icon = cat.icon;
-            const isSelected = categoria === cat.id;
+          {passengerApps.map(app => {
+            const isSelected = selectedSubcat === app.nombre;
             return (
               <button
-                key={cat.id}
+                key={app.id || app.nombre}
                 type="button"
-                onClick={() => {
-                  setCategoria(cat.id);
-                  setSubcategoria(cat.subcategories[0]);
-                }}
-                className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold transition-all ${
+                onClick={() => setSelectedSubcat(app.nombre)}
+                className={`flex items-center justify-center p-2.5 rounded-xl border text-xs font-bold transition-all ${
                   isSelected
-                    ? 'bg-cyan-500/15 border-cyan-500 text-cyan-600 dark:text-cyan-400'
+                    ? 'bg-cyan-500/15 border-cyan-500 text-cyan-600 dark:text-cyan-400 shadow-sm'
                     : 'bg-slate-100 dark:bg-slate-900/60 border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
                 }`}
               >
-                <Icon className="w-4 h-4" />
-                <span>{cat.label}</span>
+                <span>{app.nombre}</span>
               </button>
             );
           })}
-        </div>
-      </div>
-
-      {/* Subcategorías: Yango Pro, InDrive, Uber, Particular */}
-      <div>
-        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
-          Plataforma o Concepto
-        </label>
-        <div className="flex flex-wrap gap-1.5">
-          {activeCategoryObj.subcategories.map(sub => (
-            <button
-              key={sub}
-              type="button"
-              onClick={() => setSubcategoria(sub)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                subcategoria === sub
-                  ? 'bg-slate-900 dark:bg-slate-800 text-cyan-400 border-cyan-500/50 shadow-sm'
-                  : 'bg-slate-100 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/5 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              {sub}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -151,15 +113,16 @@ export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) =
         </div>
       </div>
 
-      {/* Medio de Pago */}
+      {/* Medio de Pago Requerido: Efectivo, Bre-B, App */}
       <div>
         <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
-          Medio de Pago Recibido
+          Medio de Pago
         </label>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {[
-            { id: 'EFECTIVO', label: '💵 Efectivo (Mano)' },
-            { id: 'TRANSFERENCIA_BANCO', label: '📱 Nequi / Daviplata' }
+            { id: 'EFECTIVO', label: '💵 Efectivo' },
+            { id: 'BRE_B', label: '⚡ Bre-B' },
+            { id: 'APP', label: '📱 App' }
           ].map(m => (
             <button
               key={m.id}
@@ -167,7 +130,7 @@ export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) =
               onClick={() => setMedioPago(m.id as any)}
               className={`p-2.5 rounded-xl text-center border text-xs font-semibold transition-all ${
                 medioPago === m.id
-                  ? 'bg-slate-900 dark:bg-slate-800 text-white border-cyan-500/50'
+                  ? 'bg-slate-900 dark:bg-slate-800 text-white border-cyan-500/50 shadow-sm'
                   : 'bg-slate-100 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/5 hover:bg-slate-200 dark:hover:bg-slate-800'
               }`}
             >
@@ -175,20 +138,6 @@ export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) =
             </button>
           ))}
         </div>
-      </div>
-
-      {/* Detalle */}
-      <div>
-        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
-          Ruta o Detalle (Opcional)
-        </label>
-        <input
-          type="text"
-          value={descripcion}
-          onChange={e => setDescripcion(e.target.value)}
-          placeholder="ej. Carrera con Yango Pro de Centro a Calle 100"
-          className="w-full bg-white dark:bg-slate-900/80 border border-slate-300 dark:border-white/10 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500"
-        />
       </div>
 
       {/* Botón Guardar */}

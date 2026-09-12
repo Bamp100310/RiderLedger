@@ -1,6 +1,7 @@
 export type TransactionType = 'INGRESO' | 'GASTO' | 'COBRO_EFECTIVO_APP';
 
-export type PaymentMethod = 'APP' | 'EFECTIVO' | 'TRANSFERENCIA_BANCO';
+// Categorización requerida: Efectivo, Bre-B, App
+export type PaymentMethod = 'EFECTIVO' | 'BRE_B' | 'APP';
 
 export type IncomeCategory = 'DOMICILIOS' | 'PASAJEROS' | 'OTROS_INGRESOS';
 
@@ -10,17 +11,18 @@ export type TransactionCategory = IncomeCategory | ExpenseCategory | string;
 
 export interface Shift {
   id: string;
+  userId?: string;
   fecha: string; // YYYY-MM-DD
   tiempo_reparto_minutos: number;
   tiempo_espera_minutos: number;
   kilometros: number;
-  notas?: string | null;
   created_at?: string;
   sync_status?: 'synced' | 'pending' | 'error';
 }
 
 export interface Transaction {
   id: string;
+  userId?: string;
   fecha: string; // YYYY-MM-DD
   tipo: TransactionType;
   categoria: string;
@@ -43,9 +45,10 @@ export interface DateFilter {
 
 export interface CreditInstallment {
   id: string;
-  nombre: string; // ej: "Cuota Moto", "Crédito Bancario", "Cuota Celular"
+  userId?: string;
+  nombre: string; // ej: "Cuota Moto", "Crédito Bancario"
   montoCuota: number;
-  diaPago: 10 | 30 | number; // Días 10 y 30 de cada mes
+  diaPago: 10 | 30 | number; // Días 10 y 30
   descripcion?: string;
   pagadoEsteMes?: boolean;
   ultimoMesPagado?: string; // "YYYY-MM"
@@ -57,7 +60,7 @@ export interface CreditAnalysis {
   diasRestantes: number;
   totalCuotasPendientes: number;
   superavitActual: number;
-  diferencia: number; // superavitActual - totalCuotasPendientes
+  diferencia: number;
   porcentajeCobertura: number;
   estaCubierto: boolean;
   alertaVencimientoCercano: boolean;
@@ -74,12 +77,32 @@ export interface FinancialSummary {
   totalMinutosReparto: number;
   totalMinutosEspera: number;
   totalMinutosTrabajados: number;
-  ratioProductividad: number; // Porcentaje de 0 a 100
+  ratioProductividad: number;
   kilometrosTotales: number;
   rendimientoPorHora: number;
   rendimientoPorKm: number;
   totalTransacciones: number;
   totalTurnos: number;
+}
+
+export interface UserProfile {
+  id: string;
+  nombre: string;
+  email?: string;
+  avatarColor: string;
+  rol?: string; // ej: "Repartidor Principal", "Mensajero", "Familiar"
+  pin?: string;
+  createdAt: string;
+}
+
+export interface UserApp {
+  id: string;
+  userId: string;
+  nombre: string;
+  tipo: 'DOMICILIOS' | 'PASAJEROS';
+  color: string;
+  icono?: string;
+  activa: boolean;
 }
 
 export interface SupabaseConfig {
@@ -89,7 +112,7 @@ export interface SupabaseConfig {
 
 export interface SyncQueueItem {
   id: string;
-  entity: 'shifts' | 'transactions' | 'credits';
+  entity: 'shifts' | 'transactions' | 'credits' | 'apps';
   action: 'insert' | 'update' | 'delete';
   payload: any;
   timestamp: number;

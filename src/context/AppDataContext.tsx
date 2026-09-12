@@ -8,7 +8,9 @@ import {
   TimeRange,
   CreditInstallment,
   CreditAnalysis,
-  ThemeMode
+  ThemeMode,
+  UserProfile,
+  UserApp
 } from '../types';
 import {
   getStoredShifts,
@@ -26,12 +28,36 @@ import {
   getStoredCredits,
   saveStoredCredits,
   getStoredTheme,
-  saveStoredTheme
+  saveStoredTheme,
+  getStoredUsers,
+  saveStoredUsers,
+  getActiveUser,
+  saveActiveUser,
+  getStoredUserApps,
+  saveStoredUserApps,
+  getDefaultAppsForUser
 } from '../lib/storage';
 import { calculateFinancialSummary, isDateInRange, calculateCreditAnalysis } from '../lib/calculations';
 import { getSupabaseClient, syncWithSupabase } from '../lib/supabase';
 
 interface AppDataContextType {
+  // Usuario Activo y Familia
+  activeUser: UserProfile;
+  users: UserProfile[];
+  switchUser: (userId: string) => void;
+  createUser: (nombre: string, rol?: string) => UserProfile;
+  deleteUser: (userId: string) => void;
+
+  // Apps Configurables
+  userApps: UserApp[];
+  activeDeliveryApps: UserApp[];
+  activePassengerApps: UserApp[];
+  addUserApp: (nombre: string, tipo: 'DOMICILIOS' | 'PASAJEROS', color: string, icono?: string) => void;
+  updateUserApp: (app: UserApp) => void;
+  deleteUserApp: (id: string) => void;
+  toggleUserApp: (id: string) => void;
+
+  // Datos financieros aislados por usuario
   shifts: Shift[];
   transactions: Transaction[];
   filteredShifts: Shift[];
@@ -50,10 +76,10 @@ interface AppDataContextType {
   activeDrawerTab: 'shift' | 'app_income' | 'quick_expense' | 'other_income';
   openDrawer: (tab?: 'shift' | 'app_income' | 'quick_expense' | 'other_income') => void;
   closeDrawer: () => void;
-  addShift: (shift: Omit<Shift, 'id'> & { id?: string }) => Promise<Shift>;
+  addShift: (shift: Omit<Shift, 'id' | 'userId'> & { id?: string }) => Promise<Shift>;
   updateShift: (shift: Shift) => Promise<void>;
   deleteShift: (id: string) => Promise<void>;
-  addTransaction: (tx: Omit<Transaction, 'id'> & { id?: string }) => Promise<Transaction>;
+  addTransaction: (tx: Omit<Transaction, 'id' | 'userId'> & { id?: string }) => Promise<Transaction>;
   updateTransaction: (tx: Transaction) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
   triggerSync: () => Promise<void>;
@@ -61,16 +87,16 @@ interface AppDataContextType {
   loadDemoData: () => void;
   clearAllData: () => void;
 
-  // Nuevas capacidades de Créditos y Cuotas (Días 10 y 30)
+  // Créditos del usuario activo
   credits: CreditInstallment[];
   creditAnalysis: CreditAnalysis;
-  addCredit: (credit: Omit<CreditInstallment, 'id'>) => void;
+  addCredit: (credit: Omit<CreditInstallment, 'id' | 'userId'>) => void;
   updateCredit: (credit: CreditInstallment) => void;
   deleteCredit: (id: string) => void;
   toggleCreditPaid: (id: string) => void;
   requestNotificationPermission: () => Promise<boolean>;
 
-  // Tema Claro / Oscuro
+  // Tema
   theme: ThemeMode;
   toggleTheme: () => void;
   setTheme: (mode: ThemeMode) => void;
@@ -79,34 +105,45 @@ interface AppDataContextType {
 const AppDataContext = createContext<AppDataContextType | undefined>(undefined);
 
 export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [shifts, setShifts] = useState<Shift[]>(() => {
+  // 1. Usuarios y Sesión Familiar
+  const [users, setUsers] = useState<UserProfile[]>(() => getStoredUsers());
+  const [activeUser, setActiveUserState] = useState<UserProfile>(() => getActiveUser());
+
+  // 2. Apps del usuario
+  const [allApps, setAllApps] = useState<UserApp[]>(() => {
+    return getStoredUserApps(activeUser.id);
+  });
+
+  // 3. Tema Claro/Oscuro
+  const [theme, setThemeState] = useState<ThemeMode>(() => {
+    const saved = getStoredTheme();
+    const root = document.documentElement;
+    if (saved === 'dark') {
+      root.classList.add('dark');
+      root.classList.remove('light');
+    } else {
+      root.classList.remove('dark');
+      root.classList.add('light');
+    }
+    return saved;
+  });
+
+  // 4. Datos financieros (todos los registros en localStorage)
+  const [allShifts, setAllShifts] = useState<Shift[]>(() => {
     const stored = getStoredShifts();
     if (stored.length > 0) return stored;
-    const demo = generateDemoData();
+    const demo = generateDemoData(activeUser.id);
     saveStoredShifts(demo.shifts);
     saveStoredTransactions(demo.transactions);
     return demo.shifts;
   });
 
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+  const [allTransactions, setAllTransactions] = useState<Transaction[]>(() => {
     return getStoredTransactions();
   });
 
-  const [credits, setCredits] = useState<CreditInstallment[]>(() => {
-    return getStoredCredits();
-  });
-
-  const [theme, setThemeState] = useState<ThemeMode>(() => {
-    const saved = getStoredTheme();
-    // Inicializar clase en documentElement
-    if (saved === 'dark') {
-      document.documentElement.classList.add('dark');
-      document.documentElement.classList.remove('light');
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.documentElement.classList.add('light');
-    }
-    return saved;
+  const [allCredits, setAllCredits] = useState<CreditInstallment[]>(() => {
+    return getStoredCredits(activeUser.id);
   });
 
   const [filter, setFilter] = useState<DateFilter>({ range: 'hoy' });
@@ -122,7 +159,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const isSupabaseConfigured = Boolean(supabaseConfig.url && supabaseConfig.anonKey);
 
-  // Tema
+  // Tema handler
   const setTheme = useCallback((mode: ThemeMode) => {
     setThemeState(mode);
     saveStoredTheme(mode);
@@ -133,67 +170,113 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setTheme(next);
   }, [theme, setTheme]);
 
-  // Escuchar estado de conexión del navegador
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      if (getStoredSyncQueue().length > 0) {
-        syncData();
-      }
+  // Manejo de Usuario Activo
+  const switchUser = useCallback((userId: string) => {
+    const found = users.find(u => u.id === userId);
+    if (found) {
+      setActiveUserState(found);
+      saveActiveUser(found);
+      // Recargar apps del usuario
+      const uApps = getStoredUserApps(found.id);
+      setAllApps(uApps);
+    }
+  }, [users]);
+
+  const createUser = useCallback((nombre: string, rol: string = 'Miembro Familiar'): UserProfile => {
+    const colors = ['#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4'];
+    const newUser: UserProfile = {
+      id: `user-${Date.now()}`,
+      nombre: nombre.trim(),
+      rol,
+      avatarColor: colors[Math.floor(Math.random() * colors.length)],
+      createdAt: new Date().toISOString()
     };
-    const handleOffline = () => setIsOnline(false);
+    const updated = [...users, newUser];
+    setUsers(updated);
+    saveStoredUsers(updated);
 
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    // Inicializar apps por defecto para el nuevo usuario
+    const defApps = getDefaultAppsForUser(newUser.id);
+    setAllApps(prev => [...prev, ...defApps]);
+    saveStoredUserApps([...allApps, ...defApps]);
 
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
+    switchUser(newUser.id);
+    return newUser;
+  }, [users, allApps, switchUser]);
 
-  const refreshPendingCount = useCallback(() => {
-    setPendingSyncCount(getStoredSyncQueue().length);
-  }, []);
-
-  const syncData = useCallback(async () => {
-    if (!navigator.onLine || !getSupabaseClient()) {
+  const deleteUser = useCallback((userId: string) => {
+    if (users.length <= 1) {
+      alert('Debe existir al menos un usuario en la aplicación.');
       return;
     }
-
-    setIsSyncing(true);
-    setSyncErrorMessage(null);
-
-    try {
-      const result = await syncWithSupabase(shifts, transactions);
-      if (result.success) {
-        setShifts(result.shifts);
-        saveStoredShifts(result.shifts);
-        setTransactions(result.transactions);
-        saveStoredTransactions(result.transactions);
-
-        const nowIso = new Date().toISOString();
-        setLastSyncTime(nowIso);
-        saveStoredLastSync(nowIso);
-        refreshPendingCount();
-      } else if (result.errorMessage) {
-        setSyncErrorMessage(result.errorMessage);
-      }
-    } catch (err: any) {
-      console.error('Sync failed:', err);
-      setSyncErrorMessage(err?.message || 'Error durante la sincronización');
-    } finally {
-      setIsSyncing(false);
-      refreshPendingCount();
+    const updated = users.filter(u => u.id !== userId);
+    setUsers(updated);
+    saveStoredUsers(updated);
+    if (activeUser.id === userId) {
+      switchUser(updated[0].id);
     }
-  }, [shifts, transactions, refreshPendingCount]);
+  }, [users, activeUser.id, switchUser]);
 
-  useEffect(() => {
-    if (isSupabaseConfigured && navigator.onLine) {
-      syncData();
-    }
-  }, [isSupabaseConfigured]);
+  // Manejo de Apps Configurables para el usuario activo
+  const userApps = useMemo(() => {
+    return allApps.filter(a => a.userId === activeUser.id);
+  }, [allApps, activeUser.id]);
 
+  const activeDeliveryApps = useMemo(() => {
+    return userApps.filter(a => a.tipo === 'DOMICILIOS' && a.activa);
+  }, [userApps]);
+
+  const activePassengerApps = useMemo(() => {
+    return userApps.filter(a => a.tipo === 'PASAJEROS' && a.activa);
+  }, [userApps]);
+
+  const addUserApp = (nombre: string, tipo: 'DOMICILIOS' | 'PASAJEROS', color: string, icono: string = '📱') => {
+    const newApp: UserApp = {
+      id: `${activeUser.id}-app-${Date.now()}`,
+      userId: activeUser.id,
+      nombre: nombre.trim(),
+      tipo,
+      color,
+      icono,
+      activa: true
+    };
+    const updated = [...allApps, newApp];
+    setAllApps(updated);
+    saveStoredUserApps(updated);
+  };
+
+  const updateUserApp = (app: UserApp) => {
+    const updated = allApps.map(a => (a.id === app.id ? app : a));
+    setAllApps(updated);
+    saveStoredUserApps(updated);
+  };
+
+  const deleteUserApp = (id: string) => {
+    const updated = allApps.filter(a => a.id !== id);
+    setAllApps(updated);
+    saveStoredUserApps(updated);
+  };
+
+  const toggleUserApp = (id: string) => {
+    const updated = allApps.map(a => (a.id === id ? { ...a, activa: !a.activa } : a));
+    setAllApps(updated);
+    saveStoredUserApps(updated);
+  };
+
+  // Filtrar registros estrictamente del usuario activo
+  const shifts = useMemo(() => {
+    return allShifts.filter(s => !s.userId || s.userId === activeUser.id);
+  }, [allShifts, activeUser.id]);
+
+  const transactions = useMemo(() => {
+    return allTransactions.filter(t => !t.userId || t.userId === activeUser.id);
+  }, [allTransactions, activeUser.id]);
+
+  const credits = useMemo(() => {
+    return allCredits.filter(c => !c.userId || c.userId === activeUser.id);
+  }, [allCredits, activeUser.id]);
+
+  // Filtrado temporal
   const filteredShifts = useMemo(() => {
     return shifts.filter(s => isDateInRange(s.fecha, filter.range, filter.startDate, filter.endDate));
   }, [shifts, filter]);
@@ -206,35 +289,167 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return calculateFinancialSummary(filteredShifts, filteredTransactions);
   }, [filteredShifts, filteredTransactions]);
 
-  // Análisis inteligente de créditos
   const creditAnalysis = useMemo(() => {
-    // Calculamos la cobertura comparando las cuotas con el superávit generado en el periodo actual
     return calculateCreditAnalysis(credits, summary.superavitNeto);
   }, [credits, summary.superavitNeto]);
 
-  // Recordatorios automáticos en el navegador si es el día de pago
-  useEffect(() => {
-    if (creditAnalysis.esHoy && 'Notification' in window && Notification.permission === 'granted') {
-      try {
-        new Notification('📅 Recordatorio de Pago - RiderLedger', {
-          body: `¡Hoy es día ${creditAnalysis.proximoDiaPago}! Tienes cuotas pendientes por pagar.`,
-          icon: './favicon.svg'
-        });
-      } catch (e) {
-        console.warn('Could not trigger notification', e);
+  const refreshPendingCount = useCallback(() => {
+    setPendingSyncCount(getStoredSyncQueue().length);
+  }, []);
+
+  const syncData = useCallback(async () => {
+    if (!navigator.onLine || !getSupabaseClient()) return;
+    setIsSyncing(true);
+    setSyncErrorMessage(null);
+
+    try {
+      const result = await syncWithSupabase(allShifts, allTransactions);
+      if (result.success) {
+        setAllShifts(result.shifts);
+        saveStoredShifts(result.shifts);
+        setAllTransactions(result.transactions);
+        saveStoredTransactions(result.transactions);
+        const nowIso = new Date().toISOString();
+        setLastSyncTime(nowIso);
+        saveStoredLastSync(nowIso);
+        refreshPendingCount();
+      } else if (result.errorMessage) {
+        setSyncErrorMessage(result.errorMessage);
       }
+    } catch (err: any) {
+      setSyncErrorMessage(err?.message || 'Error en sincronización');
+    } finally {
+      setIsSyncing(false);
+      refreshPendingCount();
     }
-  }, [creditAnalysis.esHoy, creditAnalysis.proximoDiaPago]);
+  }, [allShifts, allTransactions, refreshPendingCount]);
+
+  // Turnos CRUD
+  const addShift = async (newShiftData: Omit<Shift, 'id' | 'userId'> & { id?: string }): Promise<Shift> => {
+    const id = newShiftData.id || crypto.randomUUID();
+    const created_at = new Date().toISOString();
+    const isClientOnline = navigator.onLine && Boolean(getSupabaseClient());
+
+    const newShift: Shift = {
+      ...newShiftData,
+      id,
+      userId: activeUser.id,
+      created_at,
+      sync_status: isClientOnline ? 'synced' : 'pending'
+    };
+
+    const updated = [newShift, ...allShifts];
+    setAllShifts(updated);
+    saveStoredShifts(updated);
+
+    addToSyncQueue({ id, entity: 'shifts', action: 'insert', payload: newShift });
+    refreshPendingCount();
+    return newShift;
+  };
+
+  const updateShift = async (updatedShift: Shift): Promise<void> => {
+    const updated = allShifts.map(s => (s.id === updatedShift.id ? updatedShift : s));
+    setAllShifts(updated);
+    saveStoredShifts(updated);
+    addToSyncQueue({ id: updatedShift.id, entity: 'shifts', action: 'insert', payload: updatedShift });
+    refreshPendingCount();
+  };
+
+  const deleteShift = async (id: string): Promise<void> => {
+    const updated = allShifts.filter(s => s.id !== id);
+    setAllShifts(updated);
+    saveStoredShifts(updated);
+    addToSyncQueue({ id, entity: 'shifts', action: 'delete', payload: { id } });
+    refreshPendingCount();
+  };
+
+  // Transacciones CRUD
+  const addTransaction = async (txData: Omit<Transaction, 'id' | 'userId'> & { id?: string }): Promise<Transaction> => {
+    const id = txData.id || crypto.randomUUID();
+    const created_at = new Date().toISOString();
+    const isClientOnline = navigator.onLine && Boolean(getSupabaseClient());
+
+    const newTx: Transaction = {
+      ...txData,
+      id,
+      userId: activeUser.id,
+      created_at,
+      sync_status: isClientOnline ? 'synced' : 'pending'
+    };
+
+    const updated = [newTx, ...allTransactions];
+    setAllTransactions(updated);
+    saveStoredTransactions(updated);
+
+    addToSyncQueue({ id, entity: 'transactions', action: 'insert', payload: newTx });
+    refreshPendingCount();
+    return newTx;
+  };
+
+  const updateTransaction = async (updatedTx: Transaction): Promise<void> => {
+    const updated = allTransactions.map(t => (t.id === updatedTx.id ? updatedTx : t));
+    setAllTransactions(updated);
+    saveStoredTransactions(updated);
+    addToSyncQueue({ id: updatedTx.id, entity: 'transactions', action: 'insert', payload: updatedTx });
+    refreshPendingCount();
+  };
+
+  const deleteTransaction = async (id: string): Promise<void> => {
+    const updated = allTransactions.filter(t => t.id !== id);
+    setAllTransactions(updated);
+    saveStoredTransactions(updated);
+    addToSyncQueue({ id, entity: 'transactions', action: 'delete', payload: { id } });
+    refreshPendingCount();
+  };
+
+  // Créditos CRUD
+  const addCredit = (creditData: Omit<CreditInstallment, 'id' | 'userId'>) => {
+    const newCredit: CreditInstallment = {
+      ...creditData,
+      id: crypto.randomUUID(),
+      userId: activeUser.id
+    };
+    const updated = [...allCredits, newCredit];
+    setAllCredits(updated);
+    saveStoredCredits(updated);
+  };
+
+  const updateCredit = (updatedCredit: CreditInstallment) => {
+    const updated = allCredits.map(c => (c.id === updatedCredit.id ? updatedCredit : c));
+    setAllCredits(updated);
+    saveStoredCredits(updated);
+  };
+
+  const deleteCredit = (id: string) => {
+    const updated = allCredits.filter(c => c.id !== id);
+    setAllCredits(updated);
+    saveStoredCredits(updated);
+  };
+
+  const toggleCreditPaid = (id: string) => {
+    const now = new Date();
+    const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const updated = allCredits.map(c => {
+      if (c.id === id) {
+        const nextState = !c.pagadoEsteMes;
+        return {
+          ...c,
+          pagadoEsteMes: nextState,
+          ultimoMesPagado: nextState ? currentMonthStr : undefined
+        };
+      }
+      return c;
+    });
+    setAllCredits(updated);
+    saveStoredCredits(updated);
+  };
 
   const requestNotificationPermission = async (): Promise<boolean> => {
-    if (!('Notification' in window)) {
-      alert('Tu navegador no soporta notificaciones de escritorio/móvil.');
-      return false;
-    }
+    if (!('Notification' in window)) return false;
     const perm = await Notification.requestPermission();
     if (perm === 'granted') {
       new Notification('🔔 Notificaciones Activadas', {
-        body: 'Te avisaremos los días 10 y 30 para tus cuotas de crédito.',
+        body: 'Te avisaremos los días 10 y 30 para tus cuotas.',
         icon: './favicon.svg'
       });
       return true;
@@ -251,266 +466,57 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setIsQuickActionOpen(true);
   };
 
-  const closeDrawer = () => {
-    setIsQuickActionOpen(false);
-  };
-
-  // Créditos CRUD
-  const addCredit = (creditData: Omit<CreditInstallment, 'id'>) => {
-    const newCredit: CreditInstallment = {
-      ...creditData,
-      id: crypto.randomUUID()
-    };
-    const updated = [...credits, newCredit];
-    setCredits(updated);
-    saveStoredCredits(updated);
-  };
-
-  const updateCredit = (updatedCredit: CreditInstallment) => {
-    const updated = credits.map(c => (c.id === updatedCredit.id ? updatedCredit : c));
-    setCredits(updated);
-    saveStoredCredits(updated);
-  };
-
-  const deleteCredit = (id: string) => {
-    const updated = credits.filter(c => c.id !== id);
-    setCredits(updated);
-    saveStoredCredits(updated);
-  };
-
-  const toggleCreditPaid = (id: string) => {
-    const now = new Date();
-    const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const updated = credits.map(c => {
-      if (c.id === id) {
-        const nextState = !c.pagadoEsteMes;
-        return {
-          ...c,
-          pagadoEsteMes: nextState,
-          ultimoMesPagado: nextState ? currentMonthStr : undefined
-        };
-      }
-      return c;
-    });
-    setCredits(updated);
-    saveStoredCredits(updated);
-  };
-
-  // Turnos CRUD
-  const addShift = async (newShiftData: Omit<Shift, 'id'> & { id?: string }): Promise<Shift> => {
-    const id = newShiftData.id || crypto.randomUUID();
-    const created_at = new Date().toISOString();
-    const isClientOnline = navigator.onLine && Boolean(getSupabaseClient());
-
-    const newShift: Shift = {
-      ...newShiftData,
-      id,
-      created_at,
-      sync_status: isClientOnline ? 'synced' : 'pending'
-    };
-
-    const updated = [newShift, ...shifts];
-    setShifts(updated);
-    saveStoredShifts(updated);
-
-    addToSyncQueue({
-      id,
-      entity: 'shifts',
-      action: 'insert',
-      payload: newShift
-    });
-    refreshPendingCount();
-
-    if (isClientOnline) {
-      getSupabaseClient()
-        ?.from('shifts')
-        .upsert(newShiftData)
-        .then(({ error }) => {
-          if (!error) {
-            removeFromSyncQueue(id, 'shifts');
-            refreshPendingCount();
-          }
-        });
-    }
-
-    return newShift;
-  };
-
-  const updateShift = async (updatedShift: Shift): Promise<void> => {
-    const updated = shifts.map(s => (s.id === updatedShift.id ? updatedShift : s));
-    setShifts(updated);
-    saveStoredShifts(updated);
-
-    addToSyncQueue({
-      id: updatedShift.id,
-      entity: 'shifts',
-      action: 'insert',
-      payload: updatedShift
-    });
-    refreshPendingCount();
-
-    if (navigator.onLine && getSupabaseClient()) {
-      getSupabaseClient()
-        ?.from('shifts')
-        .upsert(updatedShift)
-        .then(({ error }) => {
-          if (!error) {
-            removeFromSyncQueue(updatedShift.id, 'shifts');
-            refreshPendingCount();
-          }
-        });
-    }
-  };
-
-  const deleteShift = async (id: string): Promise<void> => {
-    const updated = shifts.filter(s => s.id !== id);
-    setShifts(updated);
-    saveStoredShifts(updated);
-
-    addToSyncQueue({
-      id,
-      entity: 'shifts',
-      action: 'delete',
-      payload: { id }
-    });
-    refreshPendingCount();
-
-    if (navigator.onLine && getSupabaseClient()) {
-      getSupabaseClient()
-        ?.from('shifts')
-        .delete()
-        .eq('id', id)
-        .then(({ error }) => {
-          if (!error) {
-            removeFromSyncQueue(id, 'shifts');
-            refreshPendingCount();
-          }
-        });
-    }
-  };
-
-  // Transacciones CRUD
-  const addTransaction = async (txData: Omit<Transaction, 'id'> & { id?: string }): Promise<Transaction> => {
-    const id = txData.id || crypto.randomUUID();
-    const created_at = new Date().toISOString();
-    const isClientOnline = navigator.onLine && Boolean(getSupabaseClient());
-
-    const newTx: Transaction = {
-      ...txData,
-      id,
-      created_at,
-      sync_status: isClientOnline ? 'synced' : 'pending'
-    };
-
-    const updated = [newTx, ...transactions];
-    setTransactions(updated);
-    saveStoredTransactions(updated);
-
-    addToSyncQueue({
-      id,
-      entity: 'transactions',
-      action: 'insert',
-      payload: newTx
-    });
-    refreshPendingCount();
-
-    if (isClientOnline) {
-      getSupabaseClient()
-        ?.from('transactions')
-        .upsert(txData)
-        .then(({ error }) => {
-          if (!error) {
-            removeFromSyncQueue(id, 'transactions');
-            refreshPendingCount();
-          }
-        });
-    }
-
-    return newTx;
-  };
-
-  const updateTransaction = async (updatedTx: Transaction): Promise<void> => {
-    const updated = transactions.map(t => (t.id === updatedTx.id ? updatedTx : t));
-    setTransactions(updated);
-    saveStoredTransactions(updated);
-
-    addToSyncQueue({
-      id: updatedTx.id,
-      entity: 'transactions',
-      action: 'insert',
-      payload: updatedTx
-    });
-    refreshPendingCount();
-
-    if (navigator.onLine && getSupabaseClient()) {
-      getSupabaseClient()
-        ?.from('transactions')
-        .upsert(updatedTx)
-        .then(({ error }) => {
-          if (!error) {
-            removeFromSyncQueue(updatedTx.id, 'transactions');
-            refreshPendingCount();
-          }
-        });
-    }
-  };
-
-  const deleteTransaction = async (id: string): Promise<void> => {
-    const updated = transactions.filter(t => t.id !== id);
-    setTransactions(updated);
-    saveStoredTransactions(updated);
-
-    addToSyncQueue({
-      id,
-      entity: 'transactions',
-      action: 'delete',
-      payload: { id }
-    });
-    refreshPendingCount();
-
-    if (navigator.onLine && getSupabaseClient()) {
-      getSupabaseClient()
-        ?.from('transactions')
-        .delete()
-        .eq('id', id)
-        .then(({ error }) => {
-          if (!error) {
-            removeFromSyncQueue(id, 'transactions');
-            refreshPendingCount();
-          }
-        });
-    }
-  };
+  const closeDrawer = () => setIsQuickActionOpen(false);
 
   const updateSupabaseConfig = async (config: SupabaseConfig): Promise<void> => {
     saveStoredSupabaseConfig(config);
     setSupabaseConfigState(config);
-    if (config.url && config.anonKey) {
-      await syncData();
-    }
+    if (config.url && config.anonKey) await syncData();
   };
 
   const loadDemoData = () => {
-    const demo = generateDemoData();
-    setShifts(demo.shifts);
-    saveStoredShifts(demo.shifts);
-    setTransactions(demo.transactions);
-    saveStoredTransactions(demo.transactions);
+    const demo = generateDemoData(activeUser.id);
+    const otherShifts = allShifts.filter(s => s.userId !== activeUser.id);
+    const otherTxs = allTransactions.filter(t => t.userId !== activeUser.id);
+
+    const mergedShifts = [...otherShifts, ...demo.shifts];
+    const mergedTxs = [...otherTxs, ...demo.transactions];
+
+    setAllShifts(mergedShifts);
+    saveStoredShifts(mergedShifts);
+    setAllTransactions(mergedTxs);
+    saveStoredTransactions(mergedTxs);
     refreshPendingCount();
   };
 
   const clearAllData = () => {
-    setShifts([]);
-    setTransactions([]);
-    saveStoredShifts([]);
-    saveStoredTransactions([]);
-    localStorage.removeItem('riderledger_sync_queue_v1');
-    refreshPendingCount();
+    const otherShifts = allShifts.filter(s => s.userId !== activeUser.id);
+    const otherTxs = allTransactions.filter(t => t.userId !== activeUser.id);
+    const otherCredits = allCredits.filter(c => c.userId !== activeUser.id);
+
+    setAllShifts(otherShifts);
+    saveStoredShifts(otherShifts);
+    setAllTransactions(otherTxs);
+    saveStoredTransactions(otherTxs);
+    setAllCredits(otherCredits);
+    saveStoredCredits(otherCredits);
   };
 
   return (
     <AppDataContext.Provider
       value={{
+        activeUser,
+        users,
+        switchUser,
+        createUser,
+        deleteUser,
+        userApps,
+        activeDeliveryApps,
+        activePassengerApps,
+        addUserApp,
+        updateUserApp,
+        deleteUserApp,
+        toggleUserApp,
         shifts,
         transactions,
         filteredShifts,

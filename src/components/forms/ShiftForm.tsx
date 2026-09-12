@@ -17,7 +17,6 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ onSuccess }) => {
   const [esperaHoras, setEsperaHoras] = useState(1);
   const [esperaMinutos, setEsperaMinutos] = useState(15);
   const [kilometros, setKilometros] = useState('45.0');
-  const [notas, setNotas] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Cálculos en tiempo real
@@ -39,8 +38,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ onSuccess }) => {
         fecha,
         tiempo_reparto_minutos: totalRepartoMin,
         tiempo_espera_minutos: totalEsperaMin,
-        kilometros: parseFloat(kilometros) || 0,
-        notas: notas.trim() || null
+        kilometros: parseFloat(kilometros) || 0
       });
 
       // Celebración visual
@@ -248,20 +246,6 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ onSuccess }) => {
           />
           <span className="absolute right-3.5 top-2.5 text-xs text-slate-400 font-medium">km</span>
         </div>
-      </div>
-
-      {/* Notas */}
-      <div>
-        <label className="block text-xs font-semibold text-slate-400 mb-1">
-          Notas del Turno (Opcional)
-        </label>
-        <input
-          type="text"
-          value={notas}
-          onChange={e => setNotas(e.target.value)}
-          placeholder="ej. Mucha lluvia, alta demanda en zona norte"
-          className="w-full bg-slate-900/80 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-slate-500"
-        />
       </div>
 
       {/* Botón de Guardado */}

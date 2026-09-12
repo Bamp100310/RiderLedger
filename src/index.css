@@ -1,24 +1,31 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   :root {
-    --bg-page: #edf2f9;
+    --bg-page: #f1f5f9;
     --bg-card: #ffffff;
     --text-primary: #0f172a;
-    --text-secondary: #64748b;
+    --text-secondary: #475569;
     --border-color: #e2e8f0;
     --sidebar-bg: #1e2638;
-    --accent-cyan: #00a8cc;
+    --accent-cyan: #0284c7;
   }
 
   html.dark {
-    --bg-page: #0a0f1d;
+    --bg-page: #090e1a;
     --bg-card: #131b2e;
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
     --border-color: rgba(255, 255, 255, 0.08);
     --sidebar-bg: #161e2e;
-    --accent-cyan: #0ea5e9;
+    --accent-cyan: #00a8cc;
+  }
+
+  html {
+    background-color: var(--bg-page);
+    color: var(--text-primary);
   }
 
   body {
@@ -31,7 +38,7 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-tap-highlight-color: transparent;
-    transition: background-color 0.25s ease, color 0.25s ease;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 
   .safe-bottom {
@@ -52,7 +59,7 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #94a3b8;
+  background: #cbd5e1;
   border-radius: 9999px;
 }
 html.dark ::-webkit-scrollbar-thumb {
@@ -61,30 +68,27 @@ html.dark ::-webkit-scrollbar-thumb {
 
 /* Card Surface styles */
 .app-card {
-  background-color: #ffffff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
+  color: var(--text-primary);
 }
 html.dark .app-card {
   background-color: #131b2e;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.25);
-}
-
-/* Sidebar surface matching user's image */
-.app-sidebar {
-  background-color: #1e2638;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.3);
+  color: #f8fafc;
 }
 
 /* Glass effect for mobile navbar */
 .glass-nav {
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-color: rgba(226, 232, 240, 0.8);
+  border-color: #e2e8f0;
 }
 html.dark .glass-nav {
-  background: rgba(19, 27, 46, 0.9);
+  background: rgba(19, 27, 46, 0.95);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-color: rgba(255, 255, 255, 0.08);

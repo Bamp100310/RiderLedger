@@ -14,23 +14,23 @@ const PRESET_CATEGORIES = [
     subcat: 'Gasolina',
     label: 'Tanqueada Gasolina',
     icon: Fuel,
-    color: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
+    color: 'text-amber-500 border-amber-500/30 bg-amber-500/10',
     defaultAmount: '18000'
   },
   {
     id: 'ALIMENTACION',
-    subcat: 'Almuerzo / Arepas',
+    subcat: 'Almuerzo / Comida',
     label: 'Almuerzo / Comida',
     icon: Utensils,
-    color: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
+    color: 'text-orange-500 border-orange-500/30 bg-orange-500/10',
     defaultAmount: '14000'
   },
   {
     id: 'MANTENIMIENTO_MOTO',
     subcat: 'Taller y Aceite',
-    label: 'Mantenimiento / Aceite',
+    label: 'Mantenimiento Moto',
     icon: Wrench,
-    color: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10',
+    color: 'text-cyan-500 border-cyan-500/30 bg-cyan-500/10',
     defaultAmount: '45000'
   },
   {
@@ -38,7 +38,7 @@ const PRESET_CATEGORIES = [
     subcat: 'Imprevisto',
     label: 'Otro Gasto',
     icon: CircleDollarSign,
-    color: 'text-purple-400 border-purple-500/30 bg-purple-500/10',
+    color: 'text-purple-500 border-purple-500/30 bg-purple-500/10',
     defaultAmount: '10000'
   }
 ];
@@ -48,11 +48,10 @@ const QUICK_AMOUNTS = ['10000', '15000', '20000', '30000', '50000'];
 export const QuickExpenseForm: React.FC<QuickExpenseFormProps> = ({ onSuccess }) => {
   const { addTransaction, shifts } = useAppData();
 
-  const [fecha, setFecha] = useState(getLocalDateString());
+  const [fecha] = useState(getLocalDateString());
   const [selectedCategory, setSelectedCategory] = useState(PRESET_CATEGORIES[0]);
   const [monto, setMonto] = useState(PRESET_CATEGORIES[0].defaultAmount);
-  const [medioPago, setMedioPago] = useState<'EFECTIVO' | 'TRANSFERENCIA_BANCO' | 'APP'>('EFECTIVO');
-  const [descripcion, setDescripcion] = useState('');
+  const [medioPago, setMedioPago] = useState<'EFECTIVO' | 'BRE_B' | 'APP'>('EFECTIVO');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const todayShift = shifts.find(s => s.fecha === fecha);
@@ -72,7 +71,7 @@ export const QuickExpenseForm: React.FC<QuickExpenseFormProps> = ({ onSuccess })
         tipo: 'GASTO',
         categoria: selectedCategory.id,
         subcategoria: selectedCategory.subcat,
-        descripcion: descripcion.trim() || selectedCategory.label,
+        descripcion: selectedCategory.label,
         monto: numMonto,
         medio_pago: medioPago,
         shift_id: todayShift ? todayShift.id : null
@@ -98,8 +97,8 @@ export const QuickExpenseForm: React.FC<QuickExpenseFormProps> = ({ onSuccess })
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Botones de Categorías Rápidas */}
       <div>
-        <label className="block text-xs font-semibold text-slate-400 mb-2">
-          Gasto Frecuente
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
+          Categoría de Gasto
         </label>
         <div className="grid grid-cols-2 gap-2">
           {PRESET_CATEGORIES.map(cat => {
@@ -115,8 +114,8 @@ export const QuickExpenseForm: React.FC<QuickExpenseFormProps> = ({ onSuccess })
                 }}
                 className={`flex items-center gap-2 p-2.5 rounded-xl text-left border transition-all ${
                   isSelected
-                    ? `${cat.color} font-bold shadow-md shadow-black/20 ring-2 ring-white/20`
-                    : 'bg-slate-900/60 border-white/5 text-slate-400 hover:bg-slate-800'
+                    ? `${cat.color} font-bold shadow-sm ring-1 ring-rose-500/40`
+                    : 'bg-slate-100 dark:bg-slate-900/60 border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
                 }`}
               >
                 <Icon className="w-4 h-4 flex-shrink-0" />
@@ -129,7 +128,7 @@ export const QuickExpenseForm: React.FC<QuickExpenseFormProps> = ({ onSuccess })
 
       {/* Monto del Gasto */}
       <div>
-        <label className="block text-xs font-semibold text-slate-300 mb-1">
+        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
           Monto del Gasto ($)
         </label>
         <div className="relative">
@@ -140,7 +139,7 @@ export const QuickExpenseForm: React.FC<QuickExpenseFormProps> = ({ onSuccess })
             step="500"
             value={monto}
             onChange={e => setMonto(e.target.value)}
-            className="w-full bg-slate-900/80 border border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-base text-rose-400 font-bold focus:outline-none focus:border-rose-500"
+            className="w-full bg-white dark:bg-slate-900/80 border border-slate-300 dark:border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-base text-rose-500 dark:text-rose-400 font-bold focus:outline-none focus:border-rose-500"
             required
           />
         </div>
@@ -154,8 +153,8 @@ export const QuickExpenseForm: React.FC<QuickExpenseFormProps> = ({ onSuccess })
               onClick={() => setMonto(amt)}
               className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
                 monto === amt
-                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                  : 'bg-slate-900/60 text-slate-400 border-white/5 hover:text-slate-200'
+                  ? 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border-rose-500/40 font-bold'
+                  : 'bg-slate-100 dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/5 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
               ${parseInt(amt).toLocaleString()}
@@ -164,56 +163,41 @@ export const QuickExpenseForm: React.FC<QuickExpenseFormProps> = ({ onSuccess })
         </div>
       </div>
 
-      {/* Medio de Pago */}
+      {/* Medio de Pago Requerido: Efectivo, Bre-B, App */}
       <div>
-        <label className="block text-xs font-semibold text-slate-400 mb-1">
-          ¿Cómo pagaste?
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
+          ¿Cómo se pagó?
         </label>
         <div className="grid grid-cols-3 gap-2">
           {[
-            { id: 'EFECTIVO', label: 'Efectivo', desc: 'Bolsillo' },
-            { id: 'TRANSFERENCIA_BANCO', label: 'Nequi / Banco', desc: 'Transferencia' },
-            { id: 'APP', label: 'Saldo App', desc: 'Descuento' }
+            { id: 'EFECTIVO', label: '💵 Efectivo' },
+            { id: 'BRE_B', label: '⚡ Bre-B' },
+            { id: 'APP', label: '📱 App' }
           ].map(method => (
             <button
               key={method.id}
               type="button"
               onClick={() => setMedioPago(method.id as any)}
-              className={`p-2 rounded-xl text-center border transition-all ${
+              className={`p-2.5 rounded-xl text-center border text-xs font-semibold transition-all ${
                 medioPago === method.id
-                  ? 'bg-slate-800 text-white border-rose-500/50 font-bold'
-                  : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
+                  ? 'bg-slate-900 dark:bg-slate-800 text-white border-rose-500/50 shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/5 hover:bg-slate-200 dark:hover:bg-slate-800'
               }`}
             >
-              <p className="text-xs">{method.label}</p>
-              <p className="text-[9px] text-slate-400">{method.desc}</p>
+              {monto && method.id === 'EFECTIVO' ? '💵 Efectivo' : method.label}
             </button>
           ))}
         </div>
-      </div>
-
-      {/* Detalle o Notas */}
-      <div>
-        <label className="block text-xs font-semibold text-slate-400 mb-1">
-          Detalle o Lugar (Opcional)
-        </label>
-        <input
-          type="text"
-          value={descripcion}
-          onChange={e => setDescripcion(e.target.value)}
-          placeholder="ej. Estación Terpel calle 80"
-          className="w-full bg-slate-900/80 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-slate-500"
-        />
       </div>
 
       {/* Botón de Guardado */}
       <button
         type="submit"
         disabled={isSubmitting}
-        className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-400 text-white font-bold text-sm shadow-lg shadow-rose-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+        className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-400 text-white font-bold text-sm shadow-md shadow-rose-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
       >
         <Check className="w-4 h-4 stroke-[3]" />
-        {isSubmitting ? 'Guardando...' : 'Registrar Gasto'}
+        {isSubmitting ? 'Guardando...' : `Registrar ${selectedCategory.label}`}
       </button>
     </form>
   );

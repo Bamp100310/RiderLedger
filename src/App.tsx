@@ -17,7 +17,7 @@ const AppLayout: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen flex bg-[#edf2f9] dark:bg-[#0a0f1d] text-slate-900 dark:text-slate-100 transition-colors duration-200">
+    <div className="min-h-screen flex bg-[var(--bg-page)] text-[var(--text-primary)] transition-colors duration-200">
       {/* 1. Sidebar Fijo en Pantallas Grandes (Desktop / Tablet) */}
       <div className="hidden lg:block">
         <Sidebar />
