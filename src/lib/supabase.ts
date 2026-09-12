@@ -135,7 +135,7 @@ export async function syncWithSupabase(
   for (const item of queue) {
     try {
       if (item.entity === 'shifts') {
-        if (item.action === 'insert') {
+        if (item.action === 'insert' || item.action === 'update') {
           // Excluir sync_status de la carga enviada a Supabase
           const { sync_status, ...payload } = item.payload;
           const { error } = await client.from('shifts').upsert(payload);
@@ -147,7 +147,7 @@ export async function syncWithSupabase(
           syncedCount++;
         }
       } else if (item.entity === 'transactions') {
-        if (item.action === 'insert') {
+        if (item.action === 'insert' || item.action === 'update') {
           const { sync_status, ...payload } = item.payload;
           const { error } = await client.from('transactions').upsert(payload);
           if (error) throw error;

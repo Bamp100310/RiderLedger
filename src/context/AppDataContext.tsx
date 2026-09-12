@@ -130,12 +130,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // 4. Datos financieros (todos los registros en localStorage)
   const [allShifts, setAllShifts] = useState<Shift[]>(() => {
-    const stored = getStoredShifts();
-    if (stored.length > 0) return stored;
-    const demo = generateDemoData(activeUser.id);
-    saveStoredShifts(demo.shifts);
-    saveStoredTransactions(demo.transactions);
-    return demo.shifts;
+    return getStoredShifts();
   });
 
   const [allTransactions, setAllTransactions] = useState<Transaction[]>(() => {

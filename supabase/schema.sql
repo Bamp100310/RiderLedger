@@ -8,7 +8,8 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- 1. Tabla de Jornadas / Turnos Operativos
 CREATE TABLE IF NOT EXISTS shifts (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    "userId" TEXT,
     fecha DATE NOT NULL DEFAULT CURRENT_DATE,
     tiempo_reparto_minutos INT NOT NULL DEFAULT 0, -- Minutos activos en entregas/pedidos
     tiempo_espera_minutos INT NOT NULL DEFAULT 0,  -- Minutos de espera / tiempo muerto en calle
@@ -19,17 +20,18 @@ CREATE TABLE IF NOT EXISTS shifts (
 
 -- 2. Tabla de Transacciones Contables (Ingresos, Gastos y Cobros Efectivo)
 CREATE TABLE IF NOT EXISTS transactions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    "userId" TEXT,
     fecha DATE NOT NULL DEFAULT CURRENT_DATE,
     tipo VARCHAR(30) NOT NULL CHECK (tipo IN ('INGRESO', 'GASTO', 'COBRO_EFECTIVO_APP')),
     categoria VARCHAR(50) NOT NULL, 
     -- Ingresos: 'DOMICILIOS', 'PASAJEROS', 'OTROS_INGRESOS'
-    -- Gastos: 'COMBUSTIBLE', 'MANTENIMIENTO_MOTO', 'ALIMENTACION', 'OTROS_GASTOS'
-    subcategoria VARCHAR(50) NOT NULL, -- 'Rappi', 'Didi Food', 'Uber', 'Gasolina', 'Almuerzo', etc.
+    -- Gastos: 'COMBUSTIBLE', 'MANTENIMIENTO_MOTO', 'ALIMENTACION', 'OTROS_GASTOS', 'CUOTA_CREDITO'
+    subcategoria VARCHAR(50) NOT NULL, -- 'Rappi', 'Didi Food', 'Armi', 'Gasolina', 'Almuerzo', etc.
     descripcion TEXT,
     monto NUMERIC(12,2) NOT NULL DEFAULT 0,
-    medio_pago VARCHAR(30) NOT NULL CHECK (medio_pago IN ('APP', 'EFECTIVO', 'TRANSFERENCIA_BANCO')),
-    shift_id UUID REFERENCES shifts(id) ON DELETE SET NULL,
+    medio_pago VARCHAR(30) NOT NULL CHECK (medio_pago IN ('APP', 'EFECTIVO', 'BRE_B', 'TRANSFERENCIA_BANCO')),
+    shift_id TEXT REFERENCES shifts(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -74,3 +76,9 @@ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE transactions;
   END IF;
 END $$;
+
+-- ==============================================================================
+-- LIMPIEZA DE DATOS (OPCIONAL)
+-- Si en algún momento deseas vaciar todos los registros de prueba y dejar las tablas en blanco:
+-- TRUNCATE TABLE transactions, shifts CASCADE;
+-- ==============================================================================
