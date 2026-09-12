@@ -2,18 +2,28 @@
 
 @layer base {
   :root {
-    --bg-primary: #090d16;
-    --bg-card: #111827;
-    --bg-surface: #1e293b;
-    --accent-emerald: #10b981;
-    --accent-cyan: #06b6d4;
-    --accent-rose: #f43f5e;
-    --accent-amber: #f59e0b;
+    --bg-page: #edf2f9;
+    --bg-card: #ffffff;
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+    --border-color: #e2e8f0;
+    --sidebar-bg: #1e2638;
+    --accent-cyan: #00a8cc;
+  }
+
+  html.dark {
+    --bg-page: #0a0f1d;
+    --bg-card: #131b2e;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --sidebar-bg: #161e2e;
+    --accent-cyan: #0ea5e9;
   }
 
   body {
-    background-color: #070a12;
-    color: #f1f5f9;
+    background-color: var(--bg-page);
+    color: var(--text-primary);
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     min-height: 100vh;
     min-height: 100dvh;
@@ -21,9 +31,9 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
 
-  /* Support for iOS / Android Safe Area Insets (bottom notch) */
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 1rem);
   }
@@ -33,38 +43,53 @@
   }
 }
 
-/* Custom scrollbars */
+/* Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0b0f19;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #283548;
+  background: #94a3b8;
   border-radius: 9999px;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #3b4d66;
+html.dark ::-webkit-scrollbar-thumb {
+  background: #283548;
 }
 
-/* Glassmorphism utility */
-.glass-panel {
-  background: rgba(17, 24, 39, 0.75);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+/* Card Surface styles */
+.app-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+}
+html.dark .app-card {
+  background-color: #131b2e;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.25);
 }
 
+/* Sidebar surface matching user's image */
+.app-sidebar {
+  background-color: #1e2638;
+}
+
+/* Glass effect for mobile navbar */
 .glass-nav {
-  background: rgba(10, 14, 23, 0.85);
+  background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-color: rgba(226, 232, 240, 0.8);
+}
+html.dark .glass-nav {
+  background: rgba(19, 27, 46, 0.9);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
-/* Pulse animation for live sync */
 @keyframes sync-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }

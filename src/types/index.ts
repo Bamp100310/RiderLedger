@@ -4,7 +4,7 @@ export type PaymentMethod = 'APP' | 'EFECTIVO' | 'TRANSFERENCIA_BANCO';
 
 export type IncomeCategory = 'DOMICILIOS' | 'PASAJEROS' | 'OTROS_INGRESOS';
 
-export type ExpenseCategory = 'COMBUSTIBLE' | 'MANTENIMIENTO_MOTO' | 'ALIMENTACION' | 'OTROS_GASTOS';
+export type ExpenseCategory = 'COMBUSTIBLE' | 'MANTENIMIENTO_MOTO' | 'ALIMENTACION' | 'OTROS_GASTOS' | 'CUOTA_CREDITO';
 
 export type TransactionCategory = IncomeCategory | ExpenseCategory | string;
 
@@ -41,6 +41,30 @@ export interface DateFilter {
   endDate?: string;
 }
 
+export interface CreditInstallment {
+  id: string;
+  nombre: string; // ej: "Cuota Moto", "Crédito Bancario", "Cuota Celular"
+  montoCuota: number;
+  diaPago: 10 | 30 | number; // Días 10 y 30 de cada mes
+  descripcion?: string;
+  pagadoEsteMes?: boolean;
+  ultimoMesPagado?: string; // "YYYY-MM"
+}
+
+export interface CreditAnalysis {
+  proximoDiaPago: number; // 10 o 30
+  proximaFechaCompleta: string; // "YYYY-MM-DD"
+  diasRestantes: number;
+  totalCuotasPendientes: number;
+  superavitActual: number;
+  diferencia: number; // superavitActual - totalCuotasPendientes
+  porcentajeCobertura: number;
+  estaCubierto: boolean;
+  alertaVencimientoCercano: boolean;
+  esHoy: boolean;
+  cuotasAplicables: CreditInstallment[];
+}
+
 export interface FinancialSummary {
   ingresosTotales: number;
   gastosTotales: number;
@@ -65,8 +89,10 @@ export interface SupabaseConfig {
 
 export interface SyncQueueItem {
   id: string;
-  entity: 'shifts' | 'transactions';
+  entity: 'shifts' | 'transactions' | 'credits';
   action: 'insert' | 'update' | 'delete';
   payload: any;
   timestamp: number;
 }
+
+export type ThemeMode = 'dark' | 'light';

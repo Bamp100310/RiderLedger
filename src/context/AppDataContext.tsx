@@ -1,5 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
-import { Shift, Transaction, DateFilter, FinancialSummary, SupabaseConfig, TimeRange } from '../types';
+import {
+  Shift,
+  Transaction,
+  DateFilter,
+  FinancialSummary,
+  SupabaseConfig,
+  TimeRange,
+  CreditInstallment,
+  CreditAnalysis,
+  ThemeMode
+} from '../types';
 import {
   getStoredShifts,
   saveStoredShifts,
@@ -12,9 +22,13 @@ import {
   removeFromSyncQueue,
   getStoredLastSync,
   saveStoredLastSync,
-  generateDemoData
+  generateDemoData,
+  getStoredCredits,
+  saveStoredCredits,
+  getStoredTheme,
+  saveStoredTheme
 } from '../lib/storage';
-import { calculateFinancialSummary, isDateInRange } from '../lib/calculations';
+import { calculateFinancialSummary, isDateInRange, calculateCreditAnalysis } from '../lib/calculations';
 import { getSupabaseClient, syncWithSupabase } from '../lib/supabase';
 
 interface AppDataContextType {
@@ -46,6 +60,20 @@ interface AppDataContextType {
   updateSupabaseConfig: (config: SupabaseConfig) => Promise<void>;
   loadDemoData: () => void;
   clearAllData: () => void;
+
+  // Nuevas capacidades de Créditos y Cuotas (Días 10 y 30)
+  credits: CreditInstallment[];
+  creditAnalysis: CreditAnalysis;
+  addCredit: (credit: Omit<CreditInstallment, 'id'>) => void;
+  updateCredit: (credit: CreditInstallment) => void;
+  deleteCredit: (id: string) => void;
+  toggleCreditPaid: (id: string) => void;
+  requestNotificationPermission: () => Promise<boolean>;
+
+  // Tema Claro / Oscuro
+  theme: ThemeMode;
+  toggleTheme: () => void;
+  setTheme: (mode: ThemeMode) => void;
 }
 
 const AppDataContext = createContext<AppDataContextType | undefined>(undefined);
@@ -54,7 +82,6 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [shifts, setShifts] = useState<Shift[]>(() => {
     const stored = getStoredShifts();
     if (stored.length > 0) return stored;
-    // Si no hay datos, inicializamos con datos de demo para dar una experiencia inmediata excelente
     const demo = generateDemoData();
     saveStoredShifts(demo.shifts);
     saveStoredTransactions(demo.transactions);
@@ -65,6 +92,23 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return getStoredTransactions();
   });
 
+  const [credits, setCredits] = useState<CreditInstallment[]>(() => {
+    return getStoredCredits();
+  });
+
+  const [theme, setThemeState] = useState<ThemeMode>(() => {
+    const saved = getStoredTheme();
+    // Inicializar clase en documentElement
+    if (saved === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
+    }
+    return saved;
+  });
+
   const [filter, setFilter] = useState<DateFilter>({ range: 'hoy' });
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -73,17 +117,26 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [supabaseConfig, setSupabaseConfigState] = useState<SupabaseConfig>(getStoredSupabaseConfig);
   const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
 
-  // Control del modal / drawer inferior táctil
   const [isQuickActionOpen, setIsQuickActionOpen] = useState(false);
   const [activeDrawerTab, setActiveDrawerTab] = useState<'shift' | 'app_income' | 'quick_expense' | 'other_income'>('shift');
 
   const isSupabaseConfigured = Boolean(supabaseConfig.url && supabaseConfig.anonKey);
 
+  // Tema
+  const setTheme = useCallback((mode: ThemeMode) => {
+    setThemeState(mode);
+    saveStoredTheme(mode);
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+  }, [theme, setTheme]);
+
   // Escuchar estado de conexión del navegador
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      // Auto-sincronizar al recuperar internet si hay pendientes
       if (getStoredSyncQueue().length > 0) {
         syncData();
       }
@@ -99,12 +152,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, []);
 
-  // Actualizar conteo de pendientes
   const refreshPendingCount = useCallback(() => {
     setPendingSyncCount(getStoredSyncQueue().length);
   }, []);
 
-  // Función de sincronización bidireccional
   const syncData = useCallback(async () => {
     if (!navigator.onLine || !getSupabaseClient()) {
       return;
@@ -137,14 +188,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [shifts, transactions, refreshPendingCount]);
 
-  // Sincronizar al cargar si hay configuración
   useEffect(() => {
     if (isSupabaseConfigured && navigator.onLine) {
       syncData();
     }
   }, [isSupabaseConfigured]);
 
-  // Filtrado de datos reactivo
   const filteredShifts = useMemo(() => {
     return shifts.filter(s => isDateInRange(s.fecha, filter.range, filter.startDate, filter.endDate));
   }, [shifts, filter]);
@@ -156,6 +205,42 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const summary = useMemo(() => {
     return calculateFinancialSummary(filteredShifts, filteredTransactions);
   }, [filteredShifts, filteredTransactions]);
+
+  // Análisis inteligente de créditos
+  const creditAnalysis = useMemo(() => {
+    // Calculamos la cobertura comparando las cuotas con el superávit generado en el periodo actual
+    return calculateCreditAnalysis(credits, summary.superavitNeto);
+  }, [credits, summary.superavitNeto]);
+
+  // Recordatorios automáticos en el navegador si es el día de pago
+  useEffect(() => {
+    if (creditAnalysis.esHoy && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification('📅 Recordatorio de Pago - RiderLedger', {
+          body: `¡Hoy es día ${creditAnalysis.proximoDiaPago}! Tienes cuotas pendientes por pagar.`,
+          icon: './favicon.svg'
+        });
+      } catch (e) {
+        console.warn('Could not trigger notification', e);
+      }
+    }
+  }, [creditAnalysis.esHoy, creditAnalysis.proximoDiaPago]);
+
+  const requestNotificationPermission = async (): Promise<boolean> => {
+    if (!('Notification' in window)) {
+      alert('Tu navegador no soporta notificaciones de escritorio/móvil.');
+      return false;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm === 'granted') {
+      new Notification('🔔 Notificaciones Activadas', {
+        body: 'Te avisaremos los días 10 y 30 para tus cuotas de crédito.',
+        icon: './favicon.svg'
+      });
+      return true;
+    }
+    return false;
+  };
 
   const setFilterRange = (range: TimeRange, customStart?: string, customEnd?: string) => {
     setFilter({ range, startDate: customStart, endDate: customEnd });
@@ -170,12 +255,53 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setIsQuickActionOpen(false);
   };
 
-  // Operaciones CRUD de Turnos (Shifts)
+  // Créditos CRUD
+  const addCredit = (creditData: Omit<CreditInstallment, 'id'>) => {
+    const newCredit: CreditInstallment = {
+      ...creditData,
+      id: crypto.randomUUID()
+    };
+    const updated = [...credits, newCredit];
+    setCredits(updated);
+    saveStoredCredits(updated);
+  };
+
+  const updateCredit = (updatedCredit: CreditInstallment) => {
+    const updated = credits.map(c => (c.id === updatedCredit.id ? updatedCredit : c));
+    setCredits(updated);
+    saveStoredCredits(updated);
+  };
+
+  const deleteCredit = (id: string) => {
+    const updated = credits.filter(c => c.id !== id);
+    setCredits(updated);
+    saveStoredCredits(updated);
+  };
+
+  const toggleCreditPaid = (id: string) => {
+    const now = new Date();
+    const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const updated = credits.map(c => {
+      if (c.id === id) {
+        const nextState = !c.pagadoEsteMes;
+        return {
+          ...c,
+          pagadoEsteMes: nextState,
+          ultimoMesPagado: nextState ? currentMonthStr : undefined
+        };
+      }
+      return c;
+    });
+    setCredits(updated);
+    saveStoredCredits(updated);
+  };
+
+  // Turnos CRUD
   const addShift = async (newShiftData: Omit<Shift, 'id'> & { id?: string }): Promise<Shift> => {
     const id = newShiftData.id || crypto.randomUUID();
     const created_at = new Date().toISOString();
     const isClientOnline = navigator.onLine && Boolean(getSupabaseClient());
-    
+
     const newShift: Shift = {
       ...newShiftData,
       id,
@@ -187,7 +313,6 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setShifts(updated);
     saveStoredShifts(updated);
 
-    // Encolar mutación para sincronización offline
     addToSyncQueue({
       id,
       entity: 'shifts',
@@ -197,7 +322,6 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     refreshPendingCount();
 
     if (isClientOnline) {
-      // Intentar subir de inmediato
       getSupabaseClient()
         ?.from('shifts')
         .upsert(newShiftData)
@@ -265,7 +389,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Operaciones CRUD de Transacciones
+  // Transacciones CRUD
   const addTransaction = async (txData: Omit<Transaction, 'id'> & { id?: string }): Promise<Transaction> => {
     const id = txData.id || crypto.randomUUID();
     const created_at = new Date().toISOString();
@@ -414,7 +538,17 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         triggerSync: syncData,
         updateSupabaseConfig,
         loadDemoData,
-        clearAllData
+        clearAllData,
+        credits,
+        creditAnalysis,
+        addCredit,
+        updateCredit,
+        deleteCredit,
+        toggleCreditPaid,
+        requestNotificationPermission,
+        theme,
+        toggleTheme,
+        setTheme
       }}
     >
       {children}

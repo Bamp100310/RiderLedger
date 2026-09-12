@@ -1,4 +1,4 @@
-import { FinancialSummary, Shift, Transaction, TimeRange } from '../types';
+import { FinancialSummary, Shift, Transaction, TimeRange, CreditInstallment, CreditAnalysis } from '../types';
 
 /**
  * Formatea minutos a formato legible "Xh Ym" o "Ym", nunca decimales
@@ -442,4 +442,80 @@ export function exportToCSV(reports: ConsolidatedPeriodReport[]): void {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+}
+
+/**
+ * Calcula el análisis de cobertura de cuotas de crédito para los días 10 y 30 de cada mes
+ */
+export function calculateCreditAnalysis(
+  credits: CreditInstallment[],
+  currentSurplus: number,
+  referenceDate: Date = new Date()
+): CreditAnalysis {
+  const day = referenceDate.getDate();
+  const year = referenceDate.getFullYear();
+  const month = referenceDate.getMonth();
+
+  // Determinar si el próximo corte es el día 10 o el día 30
+  let nextDueDay: number;
+  let nextDueDate: Date;
+
+  if (day <= 10) {
+    nextDueDay = 10;
+    nextDueDate = new Date(year, month, 10);
+  } else if (day <= 30) {
+    nextDueDay = 30;
+    const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+    const actualDay = Math.min(30, lastDayOfMonth);
+    nextDueDate = new Date(year, month, actualDay);
+  } else {
+    nextDueDay = 10;
+    nextDueDate = new Date(year, month + 1, 10);
+  }
+
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const todayOnly = new Date(year, month, day);
+  const diffTime = nextDueDate.getTime() - todayOnly.getTime();
+  const diasRestantes = Math.max(0, Math.ceil(diffTime / oneDayMs));
+
+  // Filtrar cuotas aplicables para ese día de pago
+  const currentMonthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
+  const cuotasAplicables = credits.filter(c => {
+    if (nextDueDay === 10) {
+      return c.diaPago <= 15;
+    } else {
+      return c.diaPago > 15;
+    }
+  });
+
+  const totalCuotasPendientes = cuotasAplicables
+    .filter(c => !(c.pagadoEsteMes && c.ultimoMesPagado === currentMonthStr))
+    .reduce((sum, c) => sum + (Number(c.montoCuota) || 0), 0);
+
+  const diferencia = currentSurplus - totalCuotasPendientes;
+  const porcentajeCobertura = totalCuotasPendientes > 0
+    ? Math.min(999, Math.round((Math.max(0, currentSurplus) / totalCuotasPendientes) * 100))
+    : 100;
+
+  const estaCubierto = diferencia >= 0 && totalCuotasPendientes > 0;
+  const esHoy = diasRestantes === 0;
+  const alertaVencimientoCercano = diasRestantes <= 3;
+
+  const monthStr = String(nextDueDate.getMonth() + 1).padStart(2, '0');
+  const dayStr = String(nextDueDate.getDate()).padStart(2, '0');
+  const proximaFechaCompleta = `${nextDueDate.getFullYear()}-${monthStr}-${dayStr}`;
+
+  return {
+    proximoDiaPago: nextDueDay,
+    proximaFechaCompleta,
+    diasRestantes,
+    totalCuotasPendientes,
+    superavitActual: currentSurplus,
+    diferencia,
+    porcentajeCobertura,
+    estaCubierto,
+    alertaVencimientoCercano,
+    esHoy,
+    cuotasAplicables
+  };
 }

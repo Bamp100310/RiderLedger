@@ -1,35 +1,35 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, FileSpreadsheet, Plus, Bike, ReceiptText } from 'lucide-react';
+import { LayoutDashboard, FileSpreadsheet, Plus, Bike, CalendarClock } from 'lucide-react';
 import { useAppData } from '../../context/AppDataContext';
 
 export const BottomNav: React.FC = () => {
-  const { openDrawer } = useAppData();
+  const { openDrawer, creditAnalysis } = useAppData();
 
   const navItems = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/reportes', label: 'Reportes', icon: FileSpreadsheet },
     { isAction: true, label: 'Registrar', icon: Plus },
+    { to: '/creditos', label: 'Créditos', icon: CalendarClock, badge: creditAnalysis.alertaVencimientoCercano },
     { to: '/turnos', label: 'Turnos', icon: Bike },
-    { to: '/movimientos', label: 'Movimientos', icon: ReceiptText },
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 glass-nav border-t border-white/10 safe-bottom">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 glass-nav border-t border-slate-200 dark:border-white/10 safe-bottom">
       <div className="max-w-md mx-auto px-3 py-1.5 flex items-center justify-between">
-        {navItems.map((item, idx) => {
+        {navItems.map((item) => {
           if (item.isAction) {
             return (
               <div key="action-fab" className="relative -top-5 flex flex-col items-center">
                 <button
                   id="fab-quick-action"
                   onClick={() => openDrawer()}
-                  className="w-14 h-14 rounded-full bg-gradient-to-tr from-emerald-500 via-teal-500 to-cyan-500 flex items-center justify-center text-slate-950 shadow-xl shadow-emerald-500/30 hover:scale-105 active:scale-95 transition-all focus:outline-none focus:ring-4 focus:ring-emerald-400/40 border-2 border-slate-900"
+                  className="w-13 h-13 rounded-full bg-gradient-to-tr from-cyan-500 via-teal-500 to-emerald-500 flex items-center justify-center text-white shadow-xl shadow-cyan-500/30 hover:scale-105 active:scale-95 transition-all focus:outline-none border-2 border-white dark:border-slate-900"
                   aria-label="Registrar turno o movimiento rápido"
                 >
-                  <Plus className="w-7 h-7 stroke-[2.5]" />
+                  <Plus className="w-6 h-6 stroke-[2.5]" />
                 </button>
-                <span className="text-[10px] font-bold text-emerald-400 mt-1">Registrar</span>
+                <span className="text-[10px] font-bold text-cyan-600 dark:text-cyan-400 mt-1">Registrar</span>
               </div>
             );
           }
@@ -40,17 +40,22 @@ export const BottomNav: React.FC = () => {
               key={item.to}
               to={item.to!}
               className={({ isActive }) =>
-                `flex flex-col items-center py-1 px-2.5 rounded-xl transition-all ${
+                `flex flex-col items-center py-1 px-2 rounded-xl transition-all relative ${
                   isActive
-                    ? 'text-emerald-400 font-semibold scale-105'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                    ? 'text-cyan-600 dark:text-cyan-400 font-bold scale-105'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`
               }
             >
               {({ isActive }) => (
                 <>
-                  <IconComponent className={`w-5 h-5 ${isActive ? 'stroke-[2.3]' : 'stroke-1.5'}`} />
-                  <span className="text-[11px] mt-0.5 tracking-tight">{item.label}</span>
+                  <div className="relative">
+                    <IconComponent className={`w-5 h-5 ${isActive ? 'stroke-[2.3]' : 'stroke-1.5'}`} />
+                    {item.badge && (
+                      <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+                    )}
+                  </div>
+                  <span className="text-[10px] mt-0.5 tracking-tight">{item.label}</span>
                 </>
               )}
             </NavLink>

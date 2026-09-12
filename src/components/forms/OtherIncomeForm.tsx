@@ -1,16 +1,27 @@
 import React, { useState } from 'react';
 import { useAppData } from '../../context/AppDataContext';
 import { getLocalDateString } from '../../lib/calculations';
-import { Users, Package, DollarSign, Check } from 'lucide-react';
+import { Users, Package, Check } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface OtherIncomeFormProps {
   onSuccess?: () => void;
 }
 
+// Pasajeros actualizados: Yango Pro, InDrive Moto, Uber Pasajeros, Particular
 const CATEGORIES = [
-  { id: 'PASAJEROS', label: 'Pasajeros (Moto)', icon: Users, subcategories: ['Didi Moto', 'InDrive Moto', 'Uber Pasajeros', 'Particular'] },
-  { id: 'OTROS_INGRESOS', label: 'Encomiendas / Otros', icon: Package, subcategories: ['Encomienda Directa', 'Mensajería Express', 'Otro Trabajo'] }
+  {
+    id: 'PASAJEROS',
+    label: 'Pasajeros (Moto)',
+    icon: Users,
+    subcategories: ['Yango Pro', 'InDrive Moto', 'Uber Pasajeros', 'Particular']
+  },
+  {
+    id: 'OTROS_INGRESOS',
+    label: 'Encomiendas / Otros',
+    icon: Package,
+    subcategories: ['Encomienda Directa', 'Mensajería Express', 'Otro Trabajo']
+  }
 ];
 
 export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) => {
@@ -25,7 +36,6 @@ export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) =
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const todayShift = shifts.find(s => s.fecha === fecha);
-
   const activeCategoryObj = CATEGORIES.find(c => c.id === categoria) || CATEGORIES[0];
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -69,7 +79,7 @@ export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) =
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Selector de Tipo de Trabajo */}
       <div>
-        <label className="block text-xs font-semibold text-slate-400 mb-1.5">
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
           Tipo de Ingreso
         </label>
         <div className="grid grid-cols-2 gap-2">
@@ -86,8 +96,8 @@ export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) =
                 }}
                 className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-bold transition-all ${
                   isSelected
-                    ? 'bg-cyan-950/60 border-cyan-500 text-cyan-300'
-                    : 'bg-slate-900/60 border-white/5 text-slate-400 hover:bg-slate-800'
+                    ? 'bg-cyan-500/15 border-cyan-500 text-cyan-600 dark:text-cyan-400'
+                    : 'bg-slate-100 dark:bg-slate-900/60 border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
                 }`}
               >
                 <Icon className="w-4 h-4" />
@@ -98,9 +108,9 @@ export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) =
         </div>
       </div>
 
-      {/* Subcategorías / Apps de Pasajeros */}
+      {/* Subcategorías: Yango Pro, InDrive, Uber, Particular */}
       <div>
-        <label className="block text-xs font-semibold text-slate-400 mb-1.5">
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
           Plataforma o Concepto
         </label>
         <div className="flex flex-wrap gap-1.5">
@@ -111,8 +121,8 @@ export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) =
               onClick={() => setSubcategoria(sub)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                 subcategoria === sub
-                  ? 'bg-slate-800 text-cyan-400 border-cyan-500/50'
-                  : 'bg-slate-900/50 text-slate-400 border-white/5 hover:text-white'
+                  ? 'bg-slate-900 dark:bg-slate-800 text-cyan-400 border-cyan-500/50 shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/5 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               {sub}
@@ -123,7 +133,7 @@ export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) =
 
       {/* Monto Recibido */}
       <div>
-        <label className="block text-xs font-semibold text-slate-300 mb-1">
+        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
           Monto Ganado ($)
         </label>
         <div className="relative">
@@ -135,7 +145,7 @@ export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) =
             placeholder="15000"
             value={monto}
             onChange={e => setMonto(e.target.value)}
-            className="w-full bg-slate-900/80 border border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-base text-cyan-400 font-bold focus:outline-none focus:border-cyan-500"
+            className="w-full bg-white dark:bg-slate-900/80 border border-slate-300 dark:border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-base text-cyan-600 dark:text-cyan-400 font-bold focus:outline-none focus:border-cyan-500"
             required
           />
         </div>
@@ -143,7 +153,7 @@ export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) =
 
       {/* Medio de Pago */}
       <div>
-        <label className="block text-xs font-semibold text-slate-400 mb-1">
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
           Medio de Pago Recibido
         </label>
         <div className="grid grid-cols-2 gap-2">
@@ -157,8 +167,8 @@ export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) =
               onClick={() => setMedioPago(m.id as any)}
               className={`p-2.5 rounded-xl text-center border text-xs font-semibold transition-all ${
                 medioPago === m.id
-                  ? 'bg-slate-800 text-white border-cyan-500/50'
-                  : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
+                  ? 'bg-slate-900 dark:bg-slate-800 text-white border-cyan-500/50'
+                  : 'bg-slate-100 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/5 hover:bg-slate-200 dark:hover:bg-slate-800'
               }`}
             >
               {m.label}
@@ -169,15 +179,15 @@ export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) =
 
       {/* Detalle */}
       <div>
-        <label className="block text-xs font-semibold text-slate-400 mb-1">
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
           Ruta o Detalle (Opcional)
         </label>
         <input
           type="text"
           value={descripcion}
           onChange={e => setDescripcion(e.target.value)}
-          placeholder="ej. Carrera de Galerías a Unicentro"
-          className="w-full bg-slate-900/80 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-slate-500"
+          placeholder="ej. Carrera con Yango Pro de Centro a Calle 100"
+          className="w-full bg-white dark:bg-slate-900/80 border border-slate-300 dark:border-white/10 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500"
         />
       </div>
 
@@ -185,7 +195,7 @@ export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) =
       <button
         type="submit"
         disabled={isSubmitting}
-        className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-bold text-sm shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+        className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-white font-bold text-sm shadow-md shadow-cyan-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
       >
         <Check className="w-4 h-4 stroke-[3]" />
         {isSubmitting ? 'Guardando...' : 'Registrar Ingreso'}
