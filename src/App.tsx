@@ -17,9 +17,9 @@ const AppLayout: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen flex bg-[var(--bg-page)] text-[var(--text-primary)] transition-colors duration-200">
+    <div className="h-screen h-[100dvh] flex bg-[var(--bg-page)] text-[var(--text-primary)] transition-colors duration-200 overflow-hidden">
       {/* 1. Sidebar Fijo en Pantallas Grandes (Desktop / Tablet) */}
-      <div className="hidden lg:block">
+      <div className="hidden lg:block h-full flex-shrink-0">
         <Sidebar />
       </div>
 
@@ -47,12 +47,12 @@ const AppLayout: React.FC = () => {
       )}
 
       {/* 3. Área de Contenido Principal */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Header Superior con Buscador, Filtros y Modo Claro/Oscuro */}
         <Header onToggleMobileMenu={() => setMobileMenuOpen(true)} />
 
         {/* Contenido de la Página */}
-        <main className="flex-1 p-3 sm:p-5 pb-24 lg:pb-8 overflow-y-auto">
+        <main className="flex-1 p-3 sm:p-5 lg:p-6 pb-24 lg:pb-8 overflow-y-auto">
           <Routes>
             <Route path="/" element={<ExecutiveDashboard />} />
             <Route path="/reportes" element={<ReportsView />} />
@@ -68,7 +68,7 @@ const AppLayout: React.FC = () => {
       <QuickActionDrawer />
 
       {/* Barra de Navegación Inferior en Móvil (Oculta en Desktop) */}
-      <div className="lg:hidden">
+      <div className="lg:hidden flex-shrink-0">
         <BottomNav />
       </div>
     </div>

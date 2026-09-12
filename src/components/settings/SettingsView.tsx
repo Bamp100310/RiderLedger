@@ -172,7 +172,7 @@ export const SettingsView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4 max-w-4xl mx-auto pb-24">
+    <div className="space-y-4 max-w-7xl mx-auto pb-24">
       {/* Cabecera */}
       <div className="app-card rounded-2xl p-5 flex items-center justify-between">
         <div>

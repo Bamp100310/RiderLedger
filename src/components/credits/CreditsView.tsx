@@ -62,7 +62,7 @@ export const CreditsView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4 max-w-4xl mx-auto pb-20">
+    <div className="space-y-4 max-w-7xl mx-auto pb-20">
       {/* Cabecera */}
       <div className="app-card rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -257,7 +257,7 @@ export const CreditsView: React.FC = () => {
           Tus Obligaciones Configuradas ({credits.length})
         </h4>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {credits.map(credit => (
             <div
               key={credit.id}
@@ -320,7 +320,7 @@ export const CreditsView: React.FC = () => {
           ))}
 
           {credits.length === 0 && (
-            <div className="col-span-2 text-center py-8 text-xs text-slate-400">
+            <div className="col-span-1 md:col-span-2 xl:col-span-3 text-center py-12 app-card rounded-2xl text-slate-400 text-xs">
               No tienes cuotas registradas aún. Haz clic en "Nueva Cuota" para agregar tus créditos del 10 y 30.
             </div>
           )}

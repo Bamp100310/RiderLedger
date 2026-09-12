@@ -51,7 +51,7 @@ export const ReportsView: React.FC = () => {
   const avgRendimientoHora = totalHorasGen > 0 ? totals.totalIngresos / totalHorasGen : 0;
 
   return (
-    <div className="space-y-4 pb-20 max-w-5xl mx-auto">
+    <div className="space-y-4 pb-20 max-w-7xl mx-auto">
       {/* Header del Reporte */}
       <div className="app-card p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>

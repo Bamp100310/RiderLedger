@@ -55,7 +55,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
   };
 
   return (
-    <header className="sticky top-0 z-30 w-full bg-[#1e2638] text-white px-3 sm:px-5 py-3 border-b border-white/10 flex items-center justify-between gap-3 shadow-md select-none">
+    <header className="sticky top-0 z-30 flex-shrink-0 w-full bg-[#1e2638] text-white px-3 sm:px-5 py-3 border-b border-white/10 flex items-center justify-between gap-3 shadow-md select-none">
       {/* Lado Izquierdo: Botón Menú Móvil + Título Contextual */}
       <div className="flex items-center gap-3">
         <button
