@@ -390,7 +390,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const updated = allTransactions.map(t => (t.id === updatedTx.id ? updatedTx : t));
     setAllTransactions(updated);
     saveStoredTransactions(updated);
-    addToSyncQueue({ id: updatedTx.id, entity: 'transactions', action: 'insert', payload: updatedTx });
+    addToSyncQueue({ id: updatedTx.id, entity: 'transactions', action: 'update', payload: updatedTx });
     refreshPendingCount();
   };
 

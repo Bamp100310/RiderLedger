@@ -519,3 +519,212 @@ export function calculateCreditAnalysis(
     cuotasAplicables
   };
 }
+
+// ==========================================
+// CÁLCULOS ANALÍTICOS PARA EL DASHBOARD 2.0
+// ==========================================
+
+export interface StackedBarItem {
+  periodo: string;
+  // Ingresos desglosados
+  Domicilios: number;
+  Pasajeros: number;
+  OtrosIngresos: number;
+  TotalIngresos: number;
+  // Gastos desglosados
+  Combustible: number;
+  Alimentacion: number;
+  Mantenimiento: number;
+  OtrosGastos: number;
+  TotalGastos: number;
+  // Margen neto
+  Neto: number;
+}
+
+export function getStackedFinancialData(
+  transactions: Transaction[],
+  range: TimeRange
+): StackedBarItem[] {
+  if (!transactions || transactions.length === 0) return [];
+
+  const map = new Map<string, StackedBarItem>();
+
+  const getOrCreate = (key: string): StackedBarItem => {
+    if (!map.has(key)) {
+      map.set(key, {
+        periodo: key,
+        Domicilios: 0,
+        Pasajeros: 0,
+        OtrosIngresos: 0,
+        TotalIngresos: 0,
+        Combustible: 0,
+        Alimentacion: 0,
+        Mantenimiento: 0,
+        OtrosGastos: 0,
+        TotalGastos: 0,
+        Neto: 0
+      });
+    }
+    return map.get(key)!;
+  };
+
+  const sortedTx = [...transactions].sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  for (const t of sortedTx) {
+    let key = t.fecha;
+    const monto = Number(t.monto) || 0;
+
+    if (range === 'hoy') {
+      // Franjas horarias si tiene created_at
+      if (t.created_at) {
+        const hour = new Date(t.created_at).getHours();
+        if (hour < 11) key = '06:00 - 11:00';
+        else if (hour < 14) key = '11:00 - 14:00';
+        else if (hour < 17) key = '14:00 - 17:00';
+        else if (hour < 20) key = '17:00 - 20:00';
+        else key = '20:00 - 23:00';
+      } else {
+        key = 'Jornada Hoy';
+      }
+    } else if (range === 'semana') {
+      const parts = t.fecha.split('-');
+      if (parts.length === 3) {
+        const dateObj = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        key = `${days[dateObj.getDay()]} ${parts[2]}`;
+      }
+    } else if (range === 'mes') {
+      const parts = t.fecha.split('-');
+      key = parts.length === 3 ? `${parts[2]}/${parts[1]}` : t.fecha;
+    } else if (range === 'historico') {
+      const parts = t.fecha.split('-');
+      key = parts.length >= 2 ? `${parts[1]}/${parts[0].slice(2)}` : t.fecha;
+    }
+
+    const item = getOrCreate(key);
+
+    if (t.tipo === 'INGRESO') {
+      item.TotalIngresos += monto;
+      if (t.categoria === 'DOMICILIOS') {
+        item.Domicilios += monto;
+      } else if (t.categoria === 'PASAJEROS') {
+        item.Pasajeros += monto;
+      } else {
+        item.OtrosIngresos += monto;
+      }
+    } else if (t.tipo === 'GASTO') {
+      item.TotalGastos += monto;
+      if (t.categoria === 'COMBUSTIBLE') {
+        item.Combustible += monto;
+      } else if (t.categoria === 'ALIMENTACION') {
+        item.Alimentacion += monto;
+      } else if (t.categoria === 'MANTENIMIENTO_MOTO') {
+        item.Mantenimiento += monto;
+      } else {
+        item.OtrosGastos += monto;
+      }
+    }
+
+    item.Neto = item.TotalIngresos - item.TotalGastos;
+  }
+
+  return Array.from(map.values()).slice(-12);
+}
+
+export interface DistributionSlice {
+  name: string;
+  value: number;
+  percentage: number;
+  color: string;
+}
+
+const APP_BRAND_COLORS: Record<string, string> = {
+  'Rappi': '#f97316',
+  'Didi Food': '#eab308',
+  'Mensajeros Urbanos': '#ef4444',
+  'Armi': '#0284c7',
+  'Yango Pro': '#dc2626',
+  'Uber Pasajeros': '#00a8cc',
+  'InDrive Moto': '#10b981',
+  'Particular': '#8b5cf6',
+  'Gasolina': '#f59e0b',
+  'Combustible': '#f59e0b',
+  'Almuerzo / Comida': '#ec4899',
+  'Alimentación': '#ec4899',
+  'Mantenimiento Moto': '#8b5cf6',
+  'Cuota Crédito': '#6366f1',
+  'Otro Gasto': '#64748b'
+};
+
+const PALETTE = ['#0284c7', '#f97316', '#10b981', '#eab308', '#ec4899', '#8b5cf6', '#06b6d4', '#64748b'];
+
+export function getCategoryDistribution(
+  transactions: Transaction[],
+  tipo: 'INGRESO' | 'GASTO'
+): DistributionSlice[] {
+  const filtered = transactions.filter(t => t.tipo === tipo);
+  const total = filtered.reduce((acc, t) => acc + (Number(t.monto) || 0), 0);
+
+  if (total <= 0) return [];
+
+  const grouped = new Map<string, number>();
+
+  for (const t of filtered) {
+    const key = t.subcategoria || t.categoria || 'Otro';
+    grouped.set(key, (grouped.get(key) || 0) + (Number(t.monto) || 0));
+  }
+
+  return Array.from(grouped.entries())
+    .map(([name, value], index) => ({
+      name,
+      value,
+      percentage: Math.round((value / total) * 100),
+      color: APP_BRAND_COLORS[name] || PALETTE[index % PALETTE.length]
+    }))
+    .sort((a, b) => b.value - a.value);
+}
+
+export interface ProductivityDeepMetrics {
+  totalServicios: number;
+  totalHoras: number;
+  ingresoPorServicio: number;
+  serviciosPorHora: number;
+  ingresoPorHora: number;
+  costoPorHora: number;
+  margenPorHora: number;
+  minutosReparto: number;
+  minutosEspera: number;
+  ratioProductividad: number;
+  kilometrosTotales: number;
+  rendimientoKm: number;
+}
+
+export function getProductivityDeepMetrics(
+  shifts: Shift[],
+  transactions: Transaction[],
+  summary: FinancialSummary
+): ProductivityDeepMetrics {
+  const totalServicios = transactions.filter(t => t.tipo === 'INGRESO').length;
+  const totalHoras = summary.totalMinutosTrabajados > 0 ? summary.totalMinutosTrabajados / 60 : 0;
+  const ingresoPorServicio = totalServicios > 0 ? Math.round(summary.ingresosTotales / totalServicios) : 0;
+  const serviciosPorHora = totalHoras > 0 ? +(totalServicios / totalHoras).toFixed(1) : 0;
+  const ingresoPorHora = Math.round(summary.rendimientoPorHora);
+  const costoPorHora = totalHoras > 0 ? Math.round(summary.gastosTotales / totalHoras) : 0;
+  const margenPorHora = totalHoras > 0 ? Math.round(summary.superavitNeto / totalHoras) : 0;
+  const rendimientoKm = summary.kilometrosTotales > 0 ? Math.round(summary.ingresosTotales / summary.kilometrosTotales) : 0;
+
+  return {
+    totalServicios,
+    totalHoras,
+    ingresoPorServicio,
+    serviciosPorHora,
+    ingresoPorHora,
+    costoPorHora,
+    margenPorHora,
+    minutosReparto: summary.totalMinutosReparto,
+    minutosEspera: summary.totalMinutosEspera,
+    ratioProductividad: Math.round(summary.ratioProductividad),
+    kilometrosTotales: summary.kilometrosTotales,
+    rendimientoKm
+  };
+}

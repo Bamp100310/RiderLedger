@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useAppData } from '../../context/AppDataContext';
 import { formatCurrency } from '../../lib/calculations';
-import { TransactionType } from '../../types';
+import { Transaction, TransactionType } from '../../types';
+import { EditTransactionModal } from './EditTransactionModal';
 import {
   ReceiptText,
   Search,
@@ -12,13 +13,17 @@ import {
   Plus,
   Cloud,
   CloudOff,
-  Scale
+  Scale,
+  Pencil,
+  ArrowUpDown
 } from 'lucide-react';
 
 export const TransactionsLedger: React.FC = () => {
   const { transactions, deleteTransaction, openDrawer } = useAppData();
   const [selectedType, setSelectedType] = useState<'TODOS' | TransactionType>('TODOS');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'fecha_desc' | 'fecha_asc' | 'monto_desc' | 'monto_asc'>('fecha_desc');
+  const [editingTx, setEditingTx] = useState<Transaction | null>(null);
 
   const filtered = useMemo(() => {
     return transactions.filter(t => {
@@ -33,6 +38,26 @@ export const TransactionsLedger: React.FC = () => {
       return matchType && matchSearch;
     });
   }, [transactions, selectedType, searchQuery]);
+
+  const sortedTransactions = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      if (sortBy === 'fecha_desc') {
+        const dateCmp = b.fecha.localeCompare(a.fecha);
+        return dateCmp !== 0 ? dateCmp : (b.created_at || '').localeCompare(a.created_at || '');
+      }
+      if (sortBy === 'fecha_asc') {
+        const dateCmp = a.fecha.localeCompare(b.fecha);
+        return dateCmp !== 0 ? dateCmp : (a.created_at || '').localeCompare(b.created_at || '');
+      }
+      if (sortBy === 'monto_desc') {
+        return Number(b.monto) - Number(a.monto);
+      }
+      if (sortBy === 'monto_asc') {
+        return Number(a.monto) - Number(b.monto);
+      }
+      return 0;
+    });
+  }, [filtered, sortBy]);
 
   // Cálculos de KPI para la cabecera
   const kpis = useMemo(() => {
@@ -71,7 +96,7 @@ export const TransactionsLedger: React.FC = () => {
             Libro de Movimientos
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Registro contable auditado de ingresos brutos, gastos y cobros en efectivo en calle
+            Registro contable completo: crea, edita y audita ingresos, gastos y cobros en efectivo
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -155,8 +180,8 @@ export const TransactionsLedger: React.FC = () => {
         </div>
       </div>
 
-      {/* Barra de Búsqueda y Filtros */}
-      <div className="app-card p-3 sm:p-4 rounded-2xl flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+      {/* Barra de Búsqueda, Filtros y Ordenamiento */}
+      <div className="app-card p-3 sm:p-4 rounded-2xl flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
@@ -168,32 +193,49 @@ export const TransactionsLedger: React.FC = () => {
           />
         </div>
 
-        {/* Píldoras de Tipo */}
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-          {[
-            { id: 'TODOS', label: `Todos (${transactions.length})` },
-            { id: 'INGRESO', label: 'Ingresos' },
-            { id: 'GASTO', label: 'Gastos' },
-            { id: 'COBRO_EFECTIVO_APP', label: 'Cobros Efectivo' }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setSelectedType(tab.id as any)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
-                selectedType === tab.id
-                  ? 'bg-cyan-500 text-white border-cyan-500 shadow-sm'
-                  : 'bg-white dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/5 hover:text-slate-900 dark:hover:text-white'
-              }`}
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+          {/* Píldoras de Tipo */}
+          <div className="flex gap-1 overflow-x-auto pb-0.5">
+            {[
+              { id: 'TODOS', label: `Todos (${transactions.length})` },
+              { id: 'INGRESO', label: 'Ingresos' },
+              { id: 'GASTO', label: 'Gastos' },
+              { id: 'COBRO_EFECTIVO_APP', label: 'Cobros Efectivo' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setSelectedType(tab.id as any)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
+                  selectedType === tab.id
+                    ? 'bg-cyan-500 text-white border-cyan-500 shadow-sm'
+                    : 'bg-white dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/5 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Selector de Ordenamiento */}
+          <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl px-2.5 py-1.5 flex-shrink-0">
+            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as any)}
+              className="bg-transparent text-xs font-semibold text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
             >
-              {tab.label}
-            </button>
-          ))}
+              <option value="fecha_desc">Más recientes</option>
+              <option value="fecha_asc">Más antiguos</option>
+              <option value="monto_desc">Mayor monto ($)</option>
+              <option value="monto_asc">Menor monto ($)</option>
+            </select>
+          </div>
         </div>
       </div>
 
       {/* Lista de Transacciones en Grid Responsivo (2 columnas en pantallas grandes/ultrawide) */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-        {filtered.map(t => {
+        {sortedTransactions.map(t => {
           const isIngreso = t.tipo === 'INGRESO';
           const isGasto = t.tipo === 'GASTO';
           const isCobroApp = t.tipo === 'COBRO_EFECTIVO_APP';
@@ -251,8 +293,8 @@ export const TransactionsLedger: React.FC = () => {
                 </div>
               </div>
 
-              {/* Monto y Acciones */}
-              <div className="flex items-center gap-3 flex-shrink-0">
+              {/* Monto y Acciones (Editar + Eliminar + Sync) */}
+              <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                 <div className="text-right">
                   <p
                     className={`text-sm sm:text-base font-black ${
@@ -268,12 +310,23 @@ export const TransactionsLedger: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-0.5 sm:gap-1">
                   {t.sync_status === 'pending' ? (
                     <span title="Pendiente de sincronizar"><CloudOff className="w-3.5 h-3.5 text-amber-500" /></span>
                   ) : (
                     <span title="Sincronizado"><Cloud className="w-3.5 h-3.5 text-emerald-500/60" /></span>
                   )}
+                  
+                  {/* Botón Editar Movimiento */}
+                  <button
+                    onClick={() => setEditingTx(t)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-500 hover:bg-cyan-500/10 transition-colors"
+                    title="Editar movimiento"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+
+                  {/* Botón Eliminar Movimiento */}
                   <button
                     onClick={() => handleDelete(t.id, t.descripcion || t.subcategoria)}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
@@ -287,12 +340,19 @@ export const TransactionsLedger: React.FC = () => {
           );
         })}
 
-        {filtered.length === 0 && (
+        {sortedTransactions.length === 0 && (
           <div className="col-span-1 xl:col-span-2 text-center py-12 app-card rounded-2xl text-slate-400 text-xs">
             No se encontraron movimientos con los filtros actuales.
           </div>
         )}
       </div>
+
+      {/* Modal para Editar Movimiento */}
+      <EditTransactionModal
+        transaction={editingTx}
+        isOpen={Boolean(editingTx)}
+        onClose={() => setEditingTx(null)}
+      />
     </div>
   );
 };
