@@ -141,7 +141,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return getStoredCredits(activeUser.id);
   });
 
-  const [filter, setFilter] = useState<DateFilter>({ range: 'hoy' });
+  const [filter, setFilter] = useState<DateFilter>(() => {
+    try {
+      const saved = localStorage.getItem('riderledger_filter_v2');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return { range: 'hoy' };
+  });
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(getStoredLastSync);
@@ -368,11 +374,82 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [activeUser.id, refreshPendingCount]);
 
   // Sincronización automática: Solo al cargar la app y al recuperar foco/conexión
-  // NO polling agresivo — los cambios locales se envían inmediatamente a Supabase
   useEffect(() => {
     if (getSupabaseClient()) {
       syncData();
     }
+  }, []);
+
+  // Supabase Realtime: Recibir cambios de otros dispositivos al instante por WebSockets
+  useEffect(() => {
+    const client = getSupabaseClient();
+    if (!client) return;
+
+    const channel = client
+      .channel('app_realtime_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, (payload) => {
+        if (payload.eventType === 'INSERT' && payload.new) {
+          const newRow = { ...payload.new, sync_status: 'synced' } as Transaction;
+          setAllTransactions(prev => {
+            if (prev.some(t => t.id === newRow.id)) {
+              return prev.map(t => t.id === newRow.id ? newRow : t);
+            }
+            const updated = [newRow, ...prev];
+            saveStoredTransactions(updated);
+            return updated;
+          });
+        } else if (payload.eventType === 'UPDATE' && payload.new) {
+          const updatedRow = { ...payload.new, sync_status: 'synced' } as Transaction;
+          setAllTransactions(prev => {
+            const updated = prev.map(t => t.id === updatedRow.id ? updatedRow : t);
+            saveStoredTransactions(updated);
+            return updated;
+          });
+        } else if (payload.eventType === 'DELETE' && payload.old) {
+          const deletedId = (payload.old as any)?.id;
+          if (deletedId) {
+            setAllTransactions(prev => {
+              const updated = prev.filter(t => t.id !== deletedId);
+              saveStoredTransactions(updated);
+              return updated;
+            });
+          }
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, (payload) => {
+        if (payload.eventType === 'INSERT' && payload.new) {
+          const newRow = { ...payload.new, sync_status: 'synced' } as Shift;
+          setAllShifts(prev => {
+            if (prev.some(s => s.id === newRow.id)) {
+              return prev.map(s => s.id === newRow.id ? newRow : s);
+            }
+            const updated = [newRow, ...prev];
+            saveStoredShifts(updated);
+            return updated;
+          });
+        } else if (payload.eventType === 'UPDATE' && payload.new) {
+          const updatedRow = { ...payload.new, sync_status: 'synced' } as Shift;
+          setAllShifts(prev => {
+            const updated = prev.map(s => s.id === updatedRow.id ? updatedRow : s);
+            saveStoredShifts(updated);
+            return updated;
+          });
+        } else if (payload.eventType === 'DELETE' && payload.old) {
+          const deletedId = (payload.old as any)?.id;
+          if (deletedId) {
+            setAllShifts(prev => {
+              const updated = prev.filter(s => s.id !== deletedId);
+              saveStoredShifts(updated);
+              return updated;
+            });
+          }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      client.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {
@@ -385,8 +462,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     window.addEventListener('online', handleSyncTrigger);
     window.addEventListener('focus', handleSyncTrigger);
 
-    // Polling conservador cada 2 minutos (solo para sincronizar cambios de otros dispositivos)
-    const timer = setInterval(handleSyncTrigger, 120000);
+    // Polling rápido cada 15 segundos como respaldo secundario
+    const timer = setInterval(handleSyncTrigger, 15000);
 
     return () => {
       window.removeEventListener('online', handleSyncTrigger);
@@ -403,7 +480,15 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (action === 'upsert') {
       const { sync_status, ...clean } = payload;
       client.from(entity).upsert(clean).then(({ error }) => {
-        if (error) console.warn(`Push ${entity} failed:`, error.message);
+        if (error) {
+          // Reintentar sin shift_id si viola clave foránea (ej: shift no insertado aún)
+          if (error.code === '23503' || error.message?.includes('foreign key constraint') || error.message?.includes('fkey')) {
+            const { shift_id, ...fallback } = clean;
+            client.from(entity).upsert({ ...fallback, shift_id: null }).then();
+          } else {
+            console.warn(`Push ${entity} failed:`, error.message);
+          }
+        }
       });
     } else if (action === 'delete' && id) {
       client.from(entity).delete().eq('id', id).then(({ error }) => {
@@ -558,7 +643,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const setFilterRange = (range: TimeRange, customStart?: string, customEnd?: string) => {
-    setFilter({ range, startDate: customStart, endDate: customEnd });
+    const newFilter: DateFilter = { range, startDate: customStart, endDate: customEnd };
+    setFilter(newFilter);
+    try {
+      localStorage.setItem('riderledger_filter_v2', JSON.stringify(newFilter));
+    } catch {}
   };
 
   const openDrawer = (tab?: 'shift' | 'app_income' | 'quick_expense' | 'other_income') => {

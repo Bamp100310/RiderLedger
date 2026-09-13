@@ -231,7 +231,7 @@ export const ExecutiveDashboard: React.FC = () => {
               -{formatCurrency(summary.gastosTotales)}
             </p>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-              Combustible, alimentos y mantenimiento
+              Combustible, Jhony (acompañante), alimentos y mantenimiento
             </p>
           </div>
 
@@ -346,6 +346,7 @@ export const ExecutiveDashboard: React.FC = () => {
                               <div className="space-y-1 pt-1 border-t border-white/10">
                                 <p className="font-semibold text-rose-400 text-[11px] uppercase tracking-wider">Gastos (-{formatCurrency(item.TotalGastos)})</p>
                                 {item.Combustible > 0 && <p className="text-slate-300 text-[11px] flex justify-between"><span>• Gasolina:</span> <b>{formatCurrency(item.Combustible)}</b></p>}
+                                {item.Acompanante > 0 && <p className="text-slate-300 text-[11px] flex justify-between"><span>• Jhony (Acompañante):</span> <b>{formatCurrency(item.Acompanante)}</b></p>}
                                 {item.Alimentacion > 0 && <p className="text-slate-300 text-[11px] flex justify-between"><span>• Alimentos:</span> <b>{formatCurrency(item.Alimentacion)}</b></p>}
                                 {item.Mantenimiento > 0 && <p className="text-slate-300 text-[11px] flex justify-between"><span>• Mantenimiento:</span> <b>{formatCurrency(item.Mantenimiento)}</b></p>}
                                 {item.OtrosGastos > 0 && <p className="text-slate-300 text-[11px] flex justify-between"><span>• Otros:</span> <b>{formatCurrency(item.OtrosGastos)}</b></p>}
@@ -364,6 +365,7 @@ export const ExecutiveDashboard: React.FC = () => {
                     <Bar dataKey="Domicilios" stackId="ingresos" fill="#0284c7" name="Domicilios" radius={[0, 0, 0, 0]} maxBarSize={20} />
                     <Bar dataKey="Pasajeros" stackId="ingresos" fill="#8b5cf6" name="Pasajeros" radius={[4, 4, 0, 0]} maxBarSize={20} />
                     <Bar dataKey="Combustible" stackId="gastos" fill="#f59e0b" name="Gasolina" radius={[0, 0, 0, 0]} maxBarSize={20} />
+                    <Bar dataKey="Acompanante" stackId="gastos" fill="#6366f1" name="Jhony (Acompañante)" radius={[0, 0, 0, 0]} maxBarSize={20} />
                     <Bar dataKey="Alimentacion" stackId="gastos" fill="#ec4899" name="Alimentación" radius={[0, 0, 0, 0]} maxBarSize={20} />
                     <Bar dataKey="Mantenimiento" stackId="gastos" fill="#ef4444" name="Mantenimiento" radius={[4, 4, 0, 0]} maxBarSize={20} />
                   </BarChart>

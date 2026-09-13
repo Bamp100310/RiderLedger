@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useAppData } from '../../context/AppDataContext';
 import { TimeRange } from '../../types';
-import { Calendar, X } from 'lucide-react';
+import { Calendar, X, RefreshCw } from 'lucide-react';
 
 export const TimeRangeFilter: React.FC = () => {
-  const { filter, setFilterRange } = useAppData();
+  const { filter, setFilterRange, triggerSync, isSyncing } = useAppData();
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [customStart, setCustomStart] = useState(filter.startDate || '');
   const [customEnd, setCustomEnd] = useState(filter.endDate || '');
@@ -56,6 +56,19 @@ export const TimeRangeFilter: React.FC = () => {
           >
             <Calendar className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Rango</span>
+          </button>
+
+          {/* Botón de Sincronización Rápida en Vivo */}
+          <button
+            onClick={() => triggerSync()}
+            disabled={isSyncing}
+            className={`py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all text-slate-500 dark:text-slate-400 hover:text-cyan-500 hover:bg-cyan-500/10 ${
+              isSyncing ? 'opacity-70' : ''
+            }`}
+            title="Sincronizar datos con la nube"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-cyan-500' : ''}`} />
+            <span className="hidden sm:inline">{isSyncing ? 'Sincronizando...' : 'Actualizar'}</span>
           </button>
         </div>
       </div>

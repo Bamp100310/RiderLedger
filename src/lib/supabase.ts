@@ -153,7 +153,16 @@ export async function syncWithSupabase(
         if (item.action === 'insert' || item.action === 'update') {
           const { sync_status, ...payload } = item.payload;
           const { error } = await client.from('transactions').upsert(payload);
-          if (error) throw error;
+          if (error) {
+            // Si viola clave foránea (ej: shift_id no existe en Supabase aún), reintentar sin shift_id
+            if (error.code === '23503' || error.message?.includes('foreign key constraint') || error.message?.includes('fkey')) {
+              const { shift_id, ...fallbackPayload } = payload;
+              const { error: retryErr } = await client.from('transactions').upsert({ ...fallbackPayload, shift_id: null });
+              if (retryErr) throw retryErr;
+            } else {
+              throw error;
+            }
+          }
           syncedCount++;
         } else if (item.action === 'delete') {
           const { error } = await client.from('transactions').delete().eq('id', item.id);
@@ -219,32 +228,38 @@ export async function syncWithSupabase(
 
     if (tErr) throw tErr;
 
-    // Fusionar con registros locales pendientes que aún no hayan subido
-    const pendingShiftIds = new Set(remainingQueue.filter(q => q.entity === 'shifts').map(q => q.id));
-    const pendingTxIds = new Set(remainingQueue.filter(q => q.entity === 'transactions').map(q => q.id));
-
+    // Fusionar sin perder JAMÁS ningún registro local
+    const remoteShiftMap = new Map((remoteShifts || []).map((s: any) => [s.id, s]));
     const finalShifts: Shift[] = (remoteShifts || []).map((s: any) => ({
       ...s,
       sync_status: 'synced'
     }));
 
-    // Mantener los que aún estén pendientes localmente
     for (const localS of localShifts) {
-      if (pendingShiftIds.has(localS.id) && !finalShifts.find(s => s.id === localS.id)) {
+      if (!remoteShiftMap.has(localS.id)) {
         finalShifts.push({ ...localS, sync_status: 'pending' });
+        if (!remainingQueue.some(q => q.id === localS.id)) {
+          remainingQueue.push({ id: localS.id, entity: 'shifts', action: 'insert', payload: localS, timestamp: Date.now() });
+        }
       }
     }
 
+    const remoteTxMap = new Map((remoteTransactions || []).map((t: any) => [t.id, t]));
     const finalTransactions: Transaction[] = (remoteTransactions || []).map((t: any) => ({
       ...t,
       sync_status: 'synced'
     }));
 
     for (const localT of localTransactions) {
-      if (pendingTxIds.has(localT.id) && !finalTransactions.find(t => t.id === localT.id)) {
+      if (!remoteTxMap.has(localT.id)) {
         finalTransactions.push({ ...localT, sync_status: 'pending' });
+        if (!remainingQueue.some(q => q.id === localT.id)) {
+          remainingQueue.push({ id: localT.id, entity: 'transactions', action: 'insert', payload: localT, timestamp: Date.now() });
+        }
       }
     }
+
+    saveStoredSyncQueue(remainingQueue);
 
     return {
       success: true,

@@ -52,6 +52,8 @@ export const ChartsSection: React.FC = () => {
     if (t.tipo === 'GASTO') {
       const cat = t.categoria === 'COMBUSTIBLE'
         ? 'Gasolina'
+        : (t.categoria === 'HONORARIOS_ACOMPANANTE' || t.subcategoria?.toLowerCase().includes('jhony') || t.subcategoria?.toLowerCase().includes('acompañante'))
+        ? 'Acompañante (Jhony)'
         : t.categoria === 'ALIMENTACION'
         ? 'Alimentación'
         : t.categoria === 'MANTENIMIENTO_MOTO'

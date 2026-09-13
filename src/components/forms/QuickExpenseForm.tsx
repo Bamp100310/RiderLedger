@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppData } from '../../context/AppDataContext';
 import { getLocalDateString } from '../../lib/calculations';
-import { Fuel, Utensils, Wrench, CircleDollarSign, Users, Check } from 'lucide-react';
+import { Fuel, Utensils, Wrench, CircleDollarSign, Users, Check, Calendar } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface QuickExpenseFormProps {
@@ -56,7 +56,7 @@ const QUICK_AMOUNTS = ['10000', '15000', '20000', '30000', '50000'];
 export const QuickExpenseForm: React.FC<QuickExpenseFormProps> = ({ onSuccess }) => {
   const { addTransaction, shifts } = useAppData();
 
-  const [fecha] = useState(getLocalDateString());
+  const [fecha, setFecha] = useState(getLocalDateString());
   const [selectedCategory, setSelectedCategory] = useState(PRESET_CATEGORIES[0]);
   const [monto, setMonto] = useState(PRESET_CATEGORIES[0].defaultAmount);
   const [medioPago, setMedioPago] = useState<'EFECTIVO' | 'BRE_B' | 'APP'>('EFECTIVO');
@@ -103,6 +103,21 @@ export const QuickExpenseForm: React.FC<QuickExpenseFormProps> = ({ onSuccess })
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Fecha del Gasto */}
+      <div>
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1.5">
+          <Calendar className="w-3.5 h-3.5 text-cyan-500" />
+          Fecha del Gasto
+        </label>
+        <input
+          type="date"
+          value={fecha}
+          onChange={e => setFecha(e.target.value)}
+          required
+          className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500"
+        />
+      </div>
+
       {/* Botones de Categorías Rápidas */}
       <div>
         <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
