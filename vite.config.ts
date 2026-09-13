@@ -5,7 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: './',
+  base: '/RiderLedger/',
   plugins: [
     react(),
     tailwindcss(),
@@ -20,8 +20,8 @@ export default defineConfig({
         background_color: '#020617',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: './',
-        scope: './',
+        start_url: '/RiderLedger/',
+        scope: '/RiderLedger/',
         icons: [
           {
             src: 'favicon.svg',
