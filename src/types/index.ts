@@ -70,6 +70,7 @@ export interface CreditAnalysis {
 
 export interface FinancialSummary {
   ingresosTotales: number;
+  ingresosOperativos: number; // Solo DOMICILIOS + PASAJEROS (excluye OTROS_INGRESOS)
   gastosTotales: number;
   superavitNeto: number;
   saldoApp: number;

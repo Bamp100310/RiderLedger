@@ -149,6 +149,7 @@ export function calculateFinancialSummary(
   transactions: Transaction[]
 ): FinancialSummary {
   let ingresosTotales = 0;
+  let ingresosOperativos = 0; // Solo DOMICILIOS + PASAJEROS (excluye OTROS_INGRESOS)
   let gastosTotales = 0;
   let saldoAppTarifasPropinas = 0;
   let cobrosEfectivoApp = 0;
@@ -160,6 +161,11 @@ export function calculateFinancialSummary(
 
     if (t.tipo === 'INGRESO') {
       ingresosTotales += monto;
+
+      // Ingresos operativos: solo domicilios y pasajeros (excluye OTROS_INGRESOS)
+      if (t.categoria === 'DOMICILIOS' || t.categoria === 'PASAJEROS') {
+        ingresosOperativos += monto;
+      }
 
       // Si el ingreso se registró a través de la App
       if (t.medio_pago === 'APP') {
@@ -208,15 +214,18 @@ export function calculateFinancialSummary(
   // 3. Efectivo en Mano Físico = Sum(Ingresos y Cobros en Efectivo) - Sum(Gastos en Efectivo)
   const efectivoEnMano = ingresosEfectivo - gastosEfectivo;
 
-  // 4. Rendimiento por hora = Ingresos Totales / Horas Totales
+  // 4. Rendimiento por hora = Ingresos OPERATIVOS / Horas Totales
+  //    (excluye OTROS_INGRESOS para no inflar la productividad real)
   const totalHoras = totalMinutosTrabajados / 60;
-  const rendimientoPorHora = totalHoras > 0 ? ingresosTotales / totalHoras : 0;
+  const rendimientoPorHora = totalHoras > 0 ? ingresosOperativos / totalHoras : 0;
 
-  // 5. Rendimiento por km = Ingresos Totales / Kilómetros Totales
-  const rendimientoPorKm = kilometrosTotales > 0 ? ingresosTotales / kilometrosTotales : 0;
+  // 5. Rendimiento por km = Ingresos OPERATIVOS / Kilómetros Totales
+  //    (excluye OTROS_INGRESOS para no inflar la productividad real)
+  const rendimientoPorKm = kilometrosTotales > 0 ? ingresosOperativos / kilometrosTotales : 0;
 
   return {
     ingresosTotales,
+    ingresosOperativos,
     gastosTotales,
     superavitNeto,
     saldoApp,
@@ -575,17 +584,9 @@ export function getStackedFinancialData(
     const monto = Number(t.monto) || 0;
 
     if (range === 'hoy') {
-      // Franjas horarias si tiene created_at
-      if (t.created_at) {
-        const hour = new Date(t.created_at).getHours();
-        if (hour < 11) key = '06:00 - 11:00';
-        else if (hour < 14) key = '11:00 - 14:00';
-        else if (hour < 17) key = '14:00 - 17:00';
-        else if (hour < 20) key = '17:00 - 20:00';
-        else key = '20:00 - 23:00';
-      } else {
-        key = 'Jornada Hoy';
-      }
+      // Vista "Hoy": agrupar todo en una sola barra del día
+      const parts = t.fecha.split('-');
+      key = parts.length === 3 ? `${parts[2]}/${parts[1]}` : 'Hoy';
     } else if (range === 'semana') {
       const parts = t.fecha.split('-');
       if (parts.length === 3) {
@@ -704,14 +705,20 @@ export function getProductivityDeepMetrics(
   transactions: Transaction[],
   summary: FinancialSummary
 ): ProductivityDeepMetrics {
-  const totalServicios = transactions.filter(t => t.tipo === 'INGRESO').length;
+  // Solo contar servicios operativos (DOMICILIOS + PASAJEROS), no OTROS_INGRESOS
+  const totalServicios = transactions.filter(t =>
+    t.tipo === 'INGRESO' && (t.categoria === 'DOMICILIOS' || t.categoria === 'PASAJEROS')
+  ).length;
   const totalHoras = summary.totalMinutosTrabajados > 0 ? summary.totalMinutosTrabajados / 60 : 0;
-  const ingresoPorServicio = totalServicios > 0 ? Math.round(summary.ingresosTotales / totalServicios) : 0;
+
+  // Usar ingresosOperativos (excluye OTROS_INGRESOS) para métricas de productividad real
+  const ingresosOp = summary.ingresosOperativos ?? summary.ingresosTotales;
+  const ingresoPorServicio = totalServicios > 0 ? Math.round(ingresosOp / totalServicios) : 0;
   const serviciosPorHora = totalHoras > 0 ? +(totalServicios / totalHoras).toFixed(1) : 0;
   const ingresoPorHora = Math.round(summary.rendimientoPorHora);
   const costoPorHora = totalHoras > 0 ? Math.round(summary.gastosTotales / totalHoras) : 0;
-  const margenPorHora = totalHoras > 0 ? Math.round(summary.superavitNeto / totalHoras) : 0;
-  const rendimientoKm = summary.kilometrosTotales > 0 ? Math.round(summary.ingresosTotales / summary.kilometrosTotales) : 0;
+  const margenPorHora = totalHoras > 0 ? Math.round((ingresosOp - summary.gastosTotales) / totalHoras) : 0;
+  const rendimientoKm = summary.kilometrosTotales > 0 ? Math.round(ingresosOp / summary.kilometrosTotales) : 0;
 
   return {
     totalServicios,
