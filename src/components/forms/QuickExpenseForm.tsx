@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppData } from '../../context/AppDataContext';
 import { getLocalDateString } from '../../lib/calculations';
-import { Fuel, Utensils, Wrench, CircleDollarSign, Check } from 'lucide-react';
+import { Fuel, Utensils, Wrench, CircleDollarSign, Users, Check } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface QuickExpenseFormProps {
@@ -16,6 +16,14 @@ const PRESET_CATEGORIES = [
     icon: Fuel,
     color: 'text-amber-500 border-amber-500/30 bg-amber-500/10',
     defaultAmount: '18000'
+  },
+  {
+    id: 'HONORARIOS_ACOMPANANTE',
+    subcat: 'Acompañante (Jhony)',
+    label: 'Honorarios Jhony',
+    icon: Users,
+    color: 'text-indigo-500 border-indigo-500/30 bg-indigo-500/10',
+    defaultAmount: '30000'
   },
   {
     id: 'ALIMENTACION',

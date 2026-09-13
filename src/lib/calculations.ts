@@ -253,6 +253,7 @@ export interface ConsolidatedPeriodReport {
   otrosIngresos: number;
   totalIngresos: number;
   gasolina: number;
+  acompanante: number;
   otrosGastos: number;
   totalGastos: number;
   superavit: number;
@@ -276,6 +277,7 @@ export function generateConsolidatedReport(
     pasajeros: number;
     otrosIngresos: number;
     gasolina: number;
+    acompanante: number;
     otrosGastos: number;
     minutosReparto: number;
     minutosEspera: number;
@@ -331,6 +333,7 @@ export function generateConsolidatedReport(
         pasajeros: 0,
         otrosIngresos: 0,
         gasolina: 0,
+        acompanante: 0,
         otrosGastos: 0,
         minutosReparto: 0,
         minutosEspera: 0,
@@ -356,8 +359,13 @@ export function generateConsolidatedReport(
         item.otrosIngresos += monto;
       }
     } else if (t.tipo === 'GASTO') {
-      if (t.categoria === 'COMBUSTIBLE' || t.subcategoria.toLowerCase().includes('gasolina')) {
+      if (t.categoria === 'COMBUSTIBLE' || (t.subcategoria && t.subcategoria.toLowerCase().includes('gasolina'))) {
         item.gasolina += monto;
+      } else if (
+        t.categoria === 'HONORARIOS_ACOMPANANTE' ||
+        (t.subcategoria && (t.subcategoria.toLowerCase().includes('acompañante') || t.subcategoria.toLowerCase().includes('jhony')))
+      ) {
+        item.acompanante += monto;
       } else {
         item.otrosGastos += monto;
       }
@@ -378,7 +386,7 @@ export function generateConsolidatedReport(
   const result: ConsolidatedPeriodReport[] = [];
   for (const [key, data] of map.entries()) {
     const totalIngresos = data.domicilios + data.pasajeros + data.otrosIngresos;
-    const totalGastos = data.gasolina + data.otrosGastos;
+    const totalGastos = data.gasolina + data.acompanante + data.otrosGastos;
     const superavit = totalIngresos - totalGastos;
     const totalHoras = (data.minutosReparto + data.minutosEspera) / 60;
     const rendimientoHora = totalHoras > 0 ? totalIngresos / totalHoras : 0;
@@ -391,6 +399,7 @@ export function generateConsolidatedReport(
       otrosIngresos: data.otrosIngresos,
       totalIngresos,
       gasolina: data.gasolina,
+      acompanante: data.acompanante,
       otrosGastos: data.otrosGastos,
       totalGastos,
       superavit,
@@ -415,6 +424,7 @@ export function exportToCSV(reports: ConsolidatedPeriodReport[]): void {
     'Otros Ingresos ($)',
     'Total Ingresos ($)',
     'Gasolina ($)',
+    'Acompañante Jhony ($)',
     'Otros Gastos ($)',
     'Total Gastos ($)',
     'Superavit ($)',
@@ -432,6 +442,7 @@ export function exportToCSV(reports: ConsolidatedPeriodReport[]): void {
     r.otrosIngresos,
     r.totalIngresos,
     r.gasolina,
+    r.acompanante,
     r.otrosGastos,
     r.totalGastos,
     r.superavit,
@@ -544,6 +555,7 @@ export interface StackedBarItem {
   Combustible: number;
   Alimentacion: number;
   Mantenimiento: number;
+  Acompanante: number;
   OtrosGastos: number;
   TotalGastos: number;
   // Margen neto
@@ -569,6 +581,7 @@ export function getStackedFinancialData(
         Combustible: 0,
         Alimentacion: 0,
         Mantenimiento: 0,
+        Acompanante: 0,
         OtrosGastos: 0,
         TotalGastos: 0,
         Neto: 0
@@ -621,6 +634,11 @@ export function getStackedFinancialData(
         item.Alimentacion += monto;
       } else if (t.categoria === 'MANTENIMIENTO_MOTO') {
         item.Mantenimiento += monto;
+      } else if (
+        t.categoria === 'HONORARIOS_ACOMPANANTE' ||
+        (t.subcategoria && (t.subcategoria.toLowerCase().includes('acompañante') || t.subcategoria.toLowerCase().includes('jhony')))
+      ) {
+        item.Acompanante += monto;
       } else {
         item.OtrosGastos += monto;
       }
@@ -653,6 +671,9 @@ const APP_BRAND_COLORS: Record<string, string> = {
   'Almuerzo / Comida': '#ec4899',
   'Alimentación': '#ec4899',
   'Mantenimiento Moto': '#8b5cf6',
+  'Honorarios Jhony': '#6366f1',
+  'Acompañante (Jhony)': '#6366f1',
+  'Honorarios Acompañante': '#6366f1',
   'Cuota Crédito': '#6366f1',
   'Otro Gasto': '#64748b'
 };

@@ -5,7 +5,7 @@ export type PaymentMethod = 'EFECTIVO' | 'BRE_B' | 'APP';
 
 export type IncomeCategory = 'DOMICILIOS' | 'PASAJEROS' | 'OTROS_INGRESOS';
 
-export type ExpenseCategory = 'COMBUSTIBLE' | 'MANTENIMIENTO_MOTO' | 'ALIMENTACION' | 'OTROS_GASTOS' | 'CUOTA_CREDITO';
+export type ExpenseCategory = 'COMBUSTIBLE' | 'MANTENIMIENTO_MOTO' | 'ALIMENTACION' | 'HONORARIOS_ACOMPANANTE' | 'OTROS_GASTOS' | 'CUOTA_CREDITO';
 
 export type TransactionCategory = IncomeCategory | ExpenseCategory | string;
 

@@ -1,9 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
+import { Shift } from '../../types';
 import { useAppData } from '../../context/AppDataContext';
 import { formatMinutes, formatCurrency } from '../../lib/calculations';
+import { EditShiftModal } from './EditShiftModal';
 import {
   Bike,
   Trash2,
+  Pencil,
   Plus,
   Calendar,
   Cloud,
@@ -16,6 +19,7 @@ import {
 
 export const ShiftsHistoryView: React.FC = () => {
   const { shifts, deleteShift, openDrawer, transactions } = useAppData();
+  const [editingShift, setEditingShift] = useState<Shift | null>(null);
 
   const handleDelete = (id: string, fecha: string) => {
     if (window.confirm(`¿Estás seguro de eliminar el turno del ${fecha}?`)) {
@@ -180,6 +184,13 @@ export const ShiftsHistoryView: React.FC = () => {
                       </span>
                     )}
                     <button
+                      onClick={() => setEditingShift(shift)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-500 hover:bg-cyan-500/10 transition-colors"
+                      title="Editar jornada"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={() => handleDelete(shift.id, shift.fecha)}
                       className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
                       title="Eliminar jornada"
@@ -251,6 +262,13 @@ export const ShiftsHistoryView: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Modal para Editar Jornada */}
+      <EditShiftModal
+        shift={editingShift}
+        isOpen={Boolean(editingShift)}
+        onClose={() => setEditingShift(null)}
+      />
     </div>
   );
 };

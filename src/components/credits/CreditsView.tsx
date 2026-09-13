@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
+import { CreditInstallment } from '../../types';
 import { useAppData } from '../../context/AppDataContext';
 import { formatCurrency } from '../../lib/calculations';
+import { EditCreditModal } from './EditCreditModal';
 import {
   CalendarClock,
   Plus,
   Trash2,
+  Pencil,
   CheckCircle2,
   AlertCircle,
   Bell,
@@ -25,6 +28,7 @@ export const CreditsView: React.FC = () => {
     requestNotificationPermission
   } = useAppData();
 
+  const [editingCredit, setEditingCredit] = useState<CreditInstallment | null>(null);
   const [nombre, setNombre] = useState('');
   const [montoCuota, setMontoCuota] = useState('');
   const [diaPago, setDiaPago] = useState<10 | 30>(30);
@@ -283,13 +287,22 @@ export const CreditsView: React.FC = () => {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => deleteCredit(credit.id)}
-                    className="text-slate-400 hover:text-rose-500 p-1"
-                    title="Eliminar cuota"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setEditingCredit(credit)}
+                      className="text-slate-400 hover:text-cyan-500 p-1.5 rounded-lg hover:bg-cyan-500/10 transition-colors"
+                      title="Editar cuota"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => deleteCredit(credit.id)}
+                      className="text-slate-400 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-500/10 transition-colors"
+                      title="Eliminar cuota"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="my-3">
@@ -328,6 +341,13 @@ export const CreditsView: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Modal para Editar Cuota */}
+      <EditCreditModal
+        credit={editingCredit}
+        isOpen={Boolean(editingCredit)}
+        onClose={() => setEditingCredit(null)}
+      />
     </div>
   );
 };

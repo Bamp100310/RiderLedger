@@ -83,6 +83,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
 
   const expensePresets = [
     { cat: 'COMBUSTIBLE', name: 'Gasolina' },
+    { cat: 'HONORARIOS_ACOMPANANTE', name: 'Acompañante (Jhony)' },
     { cat: 'ALIMENTACION', name: 'Almuerzo / Comida' },
     { cat: 'MANTENIMIENTO_MOTO', name: 'Mantenimiento Moto' },
     { cat: 'OTROS_GASTOS', name: 'Otro Gasto' }
