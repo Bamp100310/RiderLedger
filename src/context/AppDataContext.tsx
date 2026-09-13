@@ -311,25 +311,45 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setPendingSyncCount(getStoredSyncQueue().length);
   }, []);
 
+  // Refs para evitar closures stale en syncData
+  const allShiftsRef = React.useRef(allShifts);
+  const allTransactionsRef = React.useRef(allTransactions);
+  const usersRef = React.useRef(users);
+  React.useEffect(() => { allShiftsRef.current = allShifts; }, [allShifts]);
+  React.useEffect(() => { allTransactionsRef.current = allTransactions; }, [allTransactions]);
+  React.useEffect(() => { usersRef.current = users; }, [users]);
+
+  // Flag para evitar que el sync sobreescriba cambios locales recientes
+  const lastLocalChangeRef = React.useRef<number>(0);
+  const SYNC_GRACE_PERIOD_MS = 3000; // No sincronizar dentro de 3s después de un cambio local
+
   const syncData = useCallback(async () => {
     if (!navigator.onLine || !getSupabaseClient()) return;
+
+    // No reemplazar estado si hubo un cambio local muy reciente
+    const timeSinceLastChange = Date.now() - lastLocalChangeRef.current;
+    if (timeSinceLastChange < SYNC_GRACE_PERIOD_MS) return;
+
     setIsSyncing(true);
     setSyncErrorMessage(null);
 
     try {
-      const result = await syncWithSupabase(allShifts, allTransactions, users);
+      const result = await syncWithSupabase(allShiftsRef.current, allTransactionsRef.current, usersRef.current);
       if (result.success) {
-        setAllShifts(result.shifts);
-        saveStoredShifts(result.shifts);
-        setAllTransactions(result.transactions);
-        saveStoredTransactions(result.transactions);
-        if (result.users && result.users.length > 0) {
-          setUsers(result.users);
-          saveStoredUsers(result.users);
-          if (!result.users.find(u => u.id === activeUser.id)) {
-            setActiveUserState(result.users[0]);
-            saveActiveUser(result.users[0]);
-            setAllApps(getStoredUserApps(result.users[0].id));
+        // Solo actualizar si no hubo cambios locales durante la sincronización
+        if (Date.now() - lastLocalChangeRef.current >= SYNC_GRACE_PERIOD_MS) {
+          setAllShifts(result.shifts);
+          saveStoredShifts(result.shifts);
+          setAllTransactions(result.transactions);
+          saveStoredTransactions(result.transactions);
+          if (result.users && result.users.length > 0) {
+            setUsers(result.users);
+            saveStoredUsers(result.users);
+            if (!result.users.find(u => u.id === activeUser.id)) {
+              setActiveUserState(result.users[0]);
+              saveActiveUser(result.users[0]);
+              setAllApps(getStoredUserApps(result.users[0].id));
+            }
           }
         }
         const nowIso = new Date().toISOString();
@@ -345,9 +365,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setIsSyncing(false);
       refreshPendingCount();
     }
-  }, [allShifts, allTransactions, users, activeUser.id, refreshPendingCount]);
+  }, [activeUser.id, refreshPendingCount]);
 
-  // Sincronización automática: Al cargar la app, al recuperar foco y periódicamente
+  // Sincronización automática: Solo al cargar la app y al recuperar foco/conexión
+  // NO polling agresivo — los cambios locales se envían inmediatamente a Supabase
   useEffect(() => {
     if (getSupabaseClient()) {
       syncData();
@@ -364,8 +385,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     window.addEventListener('online', handleSyncTrigger);
     window.addEventListener('focus', handleSyncTrigger);
 
-    // Polling cada 15 segundos para sincronizar cambios entre celular y PC sin recargar
-    const timer = setInterval(handleSyncTrigger, 15000);
+    // Polling conservador cada 2 minutos (solo para sincronizar cambios de otros dispositivos)
+    const timer = setInterval(handleSyncTrigger, 120000);
 
     return () => {
       window.removeEventListener('online', handleSyncTrigger);
@@ -373,6 +394,23 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       clearInterval(timer);
     };
   }, [syncData]);
+
+  // Helper: enviar inmediatamente a Supabase en background (fire-and-forget)
+  const pushToSupabaseNow = useCallback((entity: 'shifts' | 'transactions', action: 'upsert' | 'delete', payload: any, id?: string) => {
+    const client = getSupabaseClient();
+    if (!client || !navigator.onLine) return;
+
+    if (action === 'upsert') {
+      const { sync_status, ...clean } = payload;
+      client.from(entity).upsert(clean).then(({ error }) => {
+        if (error) console.warn(`Push ${entity} failed:`, error.message);
+      });
+    } else if (action === 'delete' && id) {
+      client.from(entity).delete().eq('id', id).then(({ error }) => {
+        if (error) console.warn(`Delete ${entity} failed:`, error.message);
+      });
+    }
+  }, []);
 
   // Turnos CRUD
   const addShift = async (newShiftData: Omit<Shift, 'id' | 'userId'> & { id?: string }): Promise<Shift> => {
@@ -388,28 +426,34 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       sync_status: isClientOnline ? 'synced' : 'pending'
     };
 
+    lastLocalChangeRef.current = Date.now();
     const updated = [newShift, ...allShifts];
     setAllShifts(updated);
     saveStoredShifts(updated);
 
     addToSyncQueue({ id, entity: 'shifts', action: 'insert', payload: newShift });
+    pushToSupabaseNow('shifts', 'upsert', newShift);
     refreshPendingCount();
     return newShift;
   };
 
   const updateShift = async (updatedShift: Shift): Promise<void> => {
+    lastLocalChangeRef.current = Date.now();
     const updated = allShifts.map(s => (s.id === updatedShift.id ? updatedShift : s));
     setAllShifts(updated);
     saveStoredShifts(updated);
     addToSyncQueue({ id: updatedShift.id, entity: 'shifts', action: 'insert', payload: updatedShift });
+    pushToSupabaseNow('shifts', 'upsert', updatedShift);
     refreshPendingCount();
   };
 
   const deleteShift = async (id: string): Promise<void> => {
+    lastLocalChangeRef.current = Date.now();
     const updated = allShifts.filter(s => s.id !== id);
     setAllShifts(updated);
     saveStoredShifts(updated);
     addToSyncQueue({ id, entity: 'shifts', action: 'delete', payload: { id } });
+    pushToSupabaseNow('shifts', 'delete', null, id);
     refreshPendingCount();
   };
 
@@ -427,28 +471,34 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       sync_status: isClientOnline ? 'synced' : 'pending'
     };
 
+    lastLocalChangeRef.current = Date.now();
     const updated = [newTx, ...allTransactions];
     setAllTransactions(updated);
     saveStoredTransactions(updated);
 
     addToSyncQueue({ id, entity: 'transactions', action: 'insert', payload: newTx });
+    pushToSupabaseNow('transactions', 'upsert', newTx);
     refreshPendingCount();
     return newTx;
   };
 
   const updateTransaction = async (updatedTx: Transaction): Promise<void> => {
+    lastLocalChangeRef.current = Date.now();
     const updated = allTransactions.map(t => (t.id === updatedTx.id ? updatedTx : t));
     setAllTransactions(updated);
     saveStoredTransactions(updated);
     addToSyncQueue({ id: updatedTx.id, entity: 'transactions', action: 'update', payload: updatedTx });
+    pushToSupabaseNow('transactions', 'upsert', updatedTx);
     refreshPendingCount();
   };
 
   const deleteTransaction = async (id: string): Promise<void> => {
+    lastLocalChangeRef.current = Date.now();
     const updated = allTransactions.filter(t => t.id !== id);
     setAllTransactions(updated);
     saveStoredTransactions(updated);
     addToSyncQueue({ id, entity: 'transactions', action: 'delete', payload: { id } });
+    pushToSupabaseNow('transactions', 'delete', null, id);
     refreshPendingCount();
   };
 
