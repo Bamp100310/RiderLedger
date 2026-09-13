@@ -28,17 +28,17 @@ const STORAGE_KEYS = {
 // ==========================================
 const DEFAULT_USERS: UserProfile[] = [
   {
-    id: 'user-carlos',
-    nombre: 'Carlos (Repartidor)',
-    email: 'carlos@familia.com',
+    id: 'user-alejo',
+    nombre: 'Alejo (Repartidor)',
+    email: 'alejo@familia.com',
     rol: 'Repartidor Principal',
     avatarColor: '#0ea5e9',
     createdAt: new Date().toISOString()
   },
   {
-    id: 'user-andres',
-    nombre: 'Andrés (Familiar)',
-    email: 'andres@familia.com',
+    id: 'user-jhony',
+    nombre: 'Jhony (Familiar)',
+    email: 'jhony@familia.com',
     rol: 'Mensajero Urbano',
     avatarColor: '#10b981',
     createdAt: new Date().toISOString()
@@ -205,18 +205,23 @@ export function saveStoredCredits(credits: CreditInstallment[]): void {
 // ==========================================
 // SUPABASE & CONFIG
 // ==========================================
+const DEFAULT_SUPABASE_CONFIG: SupabaseConfig = {
+  url: (import.meta.env.VITE_SUPABASE_URL as string) || 'https://kfvhooedmfohkgdmckkt.supabase.co',
+  anonKey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || 'sb_publishable_GIDDTTFcH44rDkjEacEg7A_jabdMpV0'
+};
+
 export function getStoredSupabaseConfig(): SupabaseConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.CONFIG);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.url && parsed.anonKey) return parsed;
+    }
   } catch (e) {
     console.error('Error reading supabase config', e);
   }
 
-  return {
-    url: (import.meta.env.VITE_SUPABASE_URL as string) || '',
-    anonKey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || ''
-  };
+  return DEFAULT_SUPABASE_CONFIG;
 }
 
 export function saveStoredSupabaseConfig(config: SupabaseConfig): void {

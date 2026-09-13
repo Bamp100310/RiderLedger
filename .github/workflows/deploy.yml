@@ -41,8 +41,8 @@ jobs:
           cp dist/index.html dist/404.html
           touch dist/.nojekyll
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://kfvhooedmfohkgdmckkt.supabase.co' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'sb_publishable_GIDDTTFcH44rDkjEacEg7A_jabdMpV0' }}
 
       - name: Desplegar a rama gh-pages (Fallback automático)
         uses: JamesIves/github-pages-deploy-action@v4
