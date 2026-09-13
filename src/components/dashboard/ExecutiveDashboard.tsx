@@ -41,7 +41,7 @@ import {
 import { TimeRangeFilter } from './TimeRangeFilter';
 
 export const ExecutiveDashboard: React.FC = () => {
-  const { summary, creditAnalysis, filteredTransactions, filteredShifts, filter, openDrawer } = useAppData();
+  const { summary, creditAnalysis, filteredTransactions, transactions, filteredShifts, filter, openDrawer } = useAppData();
 
   const [chartMode, setChartMode] = useState<'stacked' | 'trend'>('stacked');
 
@@ -51,9 +51,11 @@ export const ExecutiveDashboard: React.FC = () => {
   }, [filteredShifts, filteredTransactions, summary]);
 
   // Datos para gráfico de barras apiladas y tendencias
+  // Usamos transactions (todo el historial del usuario) para que la gráfica de barras apiladas y tendencias
+  // siempre muestre la evolución temporal de los diferentes días, sin colapsar a un único día si el filtro superior está en "Hoy"
   const stackedData = useMemo(() => {
-    return getStackedFinancialData(filteredTransactions, filter.range);
-  }, [filteredTransactions, filter.range]);
+    return getStackedFinancialData(transactions, filter.range);
+  }, [transactions, filter.range]);
 
   // Distribuciones de ingresos y egresos
   const incomeDistribution = useMemo(() => {

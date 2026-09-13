@@ -584,9 +584,9 @@ export function getStackedFinancialData(
     const monto = Number(t.monto) || 0;
 
     if (range === 'hoy') {
-      // Vista "Hoy": agrupar todo en una sola barra del día
+      // Mostrar cada fecha por día (DD/MM) para que se vean los días recientes
       const parts = t.fecha.split('-');
-      key = parts.length === 3 ? `${parts[2]}/${parts[1]}` : 'Hoy';
+      key = parts.length === 3 ? `${parts[2]}/${parts[1]}` : t.fecha;
     } else if (range === 'semana') {
       const parts = t.fecha.split('-');
       if (parts.length === 3) {
