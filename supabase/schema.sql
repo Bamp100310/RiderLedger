@@ -35,6 +35,16 @@ CREATE TABLE IF NOT EXISTS transactions (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- 3. Tabla de Perfiles Familiares (Sincronización multi-dispositivo)
+CREATE TABLE IF NOT EXISTS profiles (
+    id TEXT PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    email TEXT,
+    rol TEXT,
+    "avatarColor" TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Índices de optimización para consultas por rango de fecha
 CREATE INDEX IF NOT EXISTS idx_shifts_fecha ON shifts(fecha DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_fecha ON transactions(fecha DESC);
@@ -44,9 +54,9 @@ CREATE INDEX IF NOT EXISTS idx_transactions_shift_id ON transactions(shift_id);
 -- Habilitar Políticas de Seguridad a Nivel de Fila (RLS)
 ALTER TABLE shifts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
 -- Políticas de acceso para clientes anónimos (o autenticados)
--- Nota: Si usas login individual con Supabase Auth más adelante, puedes agregar "user_id UUID"
 DROP POLICY IF EXISTS "Permitir todo a usuarios publicos en shifts" ON shifts;
 CREATE POLICY "Permitir todo a usuarios publicos en shifts"
     ON shifts FOR ALL
@@ -56,6 +66,12 @@ CREATE POLICY "Permitir todo a usuarios publicos en shifts"
 DROP POLICY IF EXISTS "Permitir todo a usuarios publicos en transactions" ON transactions;
 CREATE POLICY "Permitir todo a usuarios publicos en transactions"
     ON transactions FOR ALL
+    USING (true)
+    WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Permitir todo a usuarios publicos en profiles" ON profiles;
+CREATE POLICY "Permitir todo a usuarios publicos en profiles"
+    ON profiles FOR ALL
     USING (true)
     WITH CHECK (true);
 

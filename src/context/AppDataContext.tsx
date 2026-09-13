@@ -190,6 +190,19 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setUsers(updated);
     saveStoredUsers(updated);
 
+    // Sincronizar inmediatamente a Supabase si está conectado
+    const client = getSupabaseClient();
+    if (client) {
+      client.from('profiles').upsert({
+        id: newUser.id,
+        nombre: newUser.nombre,
+        email: newUser.email || null,
+        rol: newUser.rol,
+        avatarColor: newUser.avatarColor,
+        created_at: newUser.createdAt
+      }).then();
+    }
+
     // Inicializar apps por defecto para el nuevo usuario
     const defApps = getDefaultAppsForUser(newUser.id);
     setAllApps(prev => [...prev, ...defApps]);
@@ -207,6 +220,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const updated = users.filter(u => u.id !== userId);
     setUsers(updated);
     saveStoredUsers(updated);
+
+    const client = getSupabaseClient();
+    if (client) {
+      client.from('profiles').delete().eq('id', userId).then();
+    }
+
     if (activeUser.id === userId) {
       switchUser(updated[0].id);
     }
@@ -298,12 +317,16 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSyncErrorMessage(null);
 
     try {
-      const result = await syncWithSupabase(allShifts, allTransactions);
+      const result = await syncWithSupabase(allShifts, allTransactions, users);
       if (result.success) {
         setAllShifts(result.shifts);
         saveStoredShifts(result.shifts);
         setAllTransactions(result.transactions);
         saveStoredTransactions(result.transactions);
+        if (result.users && result.users.length > 0) {
+          setUsers(result.users);
+          saveStoredUsers(result.users);
+        }
         const nowIso = new Date().toISOString();
         setLastSyncTime(nowIso);
         saveStoredLastSync(nowIso);
@@ -317,7 +340,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setIsSyncing(false);
       refreshPendingCount();
     }
-  }, [allShifts, allTransactions, refreshPendingCount]);
+  }, [allShifts, allTransactions, users, refreshPendingCount]);
 
   // Turnos CRUD
   const addShift = async (newShiftData: Omit<Shift, 'id' | 'userId'> & { id?: string }): Promise<Shift> => {

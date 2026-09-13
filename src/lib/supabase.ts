@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Shift, Transaction, SupabaseConfig, SyncQueueItem } from '../types';
+import { Shift, Transaction, SupabaseConfig, SyncQueueItem, UserProfile } from '../types';
 import { getStoredSupabaseConfig, getStoredSyncQueue, saveStoredSyncQueue } from './storage';
 
 let supabaseInstance: SupabaseClient | null = null;
@@ -108,11 +108,13 @@ export async function testSupabaseConnection(url: string, anonKey: string): Prom
  */
 export async function syncWithSupabase(
   localShifts: Shift[],
-  localTransactions: Transaction[]
+  localTransactions: Transaction[],
+  localUsers?: UserProfile[]
 ): Promise<{
   success: boolean;
   shifts: Shift[];
   transactions: Transaction[];
+  users?: UserProfile[];
   syncedCount: number;
   errorMessage?: string;
 }> {
@@ -122,6 +124,7 @@ export async function syncWithSupabase(
       success: false,
       shifts: localShifts,
       transactions: localTransactions,
+      users: localUsers,
       syncedCount: 0,
       errorMessage: 'Supabase no está configurado aún.'
     };
@@ -166,7 +169,42 @@ export async function syncWithSupabase(
 
   saveStoredSyncQueue(remainingQueue);
 
-  // 2. Descargar registros de Supabase
+  // 2. Sincronizar perfiles de usuario familiares (Alejo, Jhony, etc.)
+  let finalUsers = localUsers;
+  if (localUsers && localUsers.length > 0) {
+    try {
+      for (const u of localUsers) {
+        await client.from('profiles').upsert({
+          id: u.id,
+          nombre: u.nombre,
+          email: u.email || null,
+          rol: u.rol || 'Miembro Familiar',
+          avatarColor: u.avatarColor || '#0ea5e9',
+          created_at: u.createdAt || new Date().toISOString()
+        });
+      }
+    } catch (pErr) {
+      console.warn('Advertencia al sincronizar perfiles locales con Supabase:', pErr);
+    }
+  }
+
+  try {
+    const { data: remoteProfiles } = await client.from('profiles').select('*');
+    if (remoteProfiles && remoteProfiles.length > 0) {
+      finalUsers = remoteProfiles.map((p: any) => ({
+        id: p.id,
+        nombre: p.nombre,
+        email: p.email || '',
+        rol: p.rol || 'Miembro Familiar',
+        avatarColor: p.avatarColor || '#0ea5e9',
+        createdAt: p.created_at || new Date().toISOString()
+      }));
+    }
+  } catch (pGetErr) {
+    console.warn('Tabla profiles no disponible todavía en Supabase:', pGetErr);
+  }
+
+  // 3. Descargar registros de Supabase
   try {
     const { data: remoteShifts, error: sErr } = await client
       .from('shifts')
@@ -213,6 +251,7 @@ export async function syncWithSupabase(
       success: true,
       shifts: finalShifts,
       transactions: finalTransactions,
+      users: finalUsers,
       syncedCount
     };
   } catch (err: any) {
@@ -220,6 +259,7 @@ export async function syncWithSupabase(
       success: false,
       shifts: localShifts,
       transactions: localTransactions,
+      users: finalUsers,
       syncedCount,
       errorMessage: err?.message || 'Error al descargar datos de Supabase'
     };
