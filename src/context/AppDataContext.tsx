@@ -326,6 +326,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (result.users && result.users.length > 0) {
           setUsers(result.users);
           saveStoredUsers(result.users);
+          if (!result.users.find(u => u.id === activeUser.id)) {
+            setActiveUserState(result.users[0]);
+            saveActiveUser(result.users[0]);
+            setAllApps(getStoredUserApps(result.users[0].id));
+          }
         }
         const nowIso = new Date().toISOString();
         setLastSyncTime(nowIso);
@@ -340,7 +345,34 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setIsSyncing(false);
       refreshPendingCount();
     }
-  }, [allShifts, allTransactions, users, refreshPendingCount]);
+  }, [allShifts, allTransactions, users, activeUser.id, refreshPendingCount]);
+
+  // Sincronización automática: Al cargar la app, al recuperar foco y periódicamente
+  useEffect(() => {
+    if (getSupabaseClient()) {
+      syncData();
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleSyncTrigger = () => {
+      if (navigator.onLine && getSupabaseClient()) {
+        syncData();
+      }
+    };
+
+    window.addEventListener('online', handleSyncTrigger);
+    window.addEventListener('focus', handleSyncTrigger);
+
+    // Polling cada 15 segundos para sincronizar cambios entre celular y PC sin recargar
+    const timer = setInterval(handleSyncTrigger, 15000);
+
+    return () => {
+      window.removeEventListener('online', handleSyncTrigger);
+      window.removeEventListener('focus', handleSyncTrigger);
+      clearInterval(timer);
+    };
+  }, [syncData]);
 
   // Turnos CRUD
   const addShift = async (newShiftData: Omit<Shift, 'id' | 'userId'> & { id?: string }): Promise<Shift> => {

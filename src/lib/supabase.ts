@@ -171,8 +171,23 @@ export async function syncWithSupabase(
 
   // 2. Sincronizar perfiles de usuario familiares (Alejo, Jhony, etc.)
   let finalUsers = localUsers;
-  if (localUsers && localUsers.length > 0) {
-    try {
+  try {
+    const { data: remoteProfiles, error: pErr } = await client
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (!pErr && remoteProfiles && remoteProfiles.length > 0) {
+      finalUsers = remoteProfiles.map((p: any) => ({
+        id: p.id,
+        nombre: p.nombre,
+        email: p.email || '',
+        rol: p.rol || 'Miembro Familiar',
+        avatarColor: p.avatarColor || '#0ea5e9',
+        createdAt: p.created_at || new Date().toISOString()
+      }));
+    } else if (localUsers && localUsers.length > 0) {
+      // Si Supabase no tiene perfiles aún, subir los locales iniciales
       for (const u of localUsers) {
         await client.from('profiles').upsert({
           id: u.id,
@@ -183,22 +198,6 @@ export async function syncWithSupabase(
           created_at: u.createdAt || new Date().toISOString()
         });
       }
-    } catch (pErr) {
-      console.warn('Advertencia al sincronizar perfiles locales con Supabase:', pErr);
-    }
-  }
-
-  try {
-    const { data: remoteProfiles } = await client.from('profiles').select('*');
-    if (remoteProfiles && remoteProfiles.length > 0) {
-      finalUsers = remoteProfiles.map((p: any) => ({
-        id: p.id,
-        nombre: p.nombre,
-        email: p.email || '',
-        rol: p.rol || 'Miembro Familiar',
-        avatarColor: p.avatarColor || '#0ea5e9',
-        createdAt: p.created_at || new Date().toISOString()
-      }));
     }
   } catch (pGetErr) {
     console.warn('Tabla profiles no disponible todavía en Supabase:', pGetErr);
