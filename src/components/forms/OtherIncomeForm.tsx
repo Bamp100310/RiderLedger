@@ -103,7 +103,7 @@ export const OtherIncomeForm: React.FC<OtherIncomeFormProps> = ({ onSuccess }) =
           <input
             type="number"
             min="0"
-            step="500"
+            step="any"
             placeholder="15000"
             value={monto}
             onChange={e => setMonto(e.target.value)}

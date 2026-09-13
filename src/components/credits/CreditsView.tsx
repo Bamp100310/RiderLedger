@@ -188,6 +188,8 @@ export const CreditsView: React.FC = () => {
               </label>
               <input
                 type="number"
+                min="0"
+                step="any"
                 placeholder="220000"
                 value={montoCuota}
                 onChange={e => setMontoCuota(e.target.value)}

@@ -211,7 +211,7 @@ export const EditTransactionModal: React.FC<EditTransactionModalProps> = ({
                 <span className="text-slate-400 font-bold text-xs absolute left-3 top-2.5">$</span>
                 <input
                   type="number"
-                  step="100"
+                  step="any"
                   value={monto}
                   onChange={e => setMonto(e.target.value)}
                   placeholder="ej. 25000"

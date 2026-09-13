@@ -128,7 +128,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ onSuccess }) => {
                 type="number"
                 min="0"
                 max="59"
-                step="5"
+                step="1"
                 value={repartoMinutos}
                 onChange={e => setRepartoMinutos(parseInt(e.target.value) || 0)}
                 className="w-full text-center bg-slate-950 border-y border-white/10 h-9 text-sm font-semibold text-white focus:outline-none"
@@ -198,7 +198,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ onSuccess }) => {
                 type="number"
                 min="0"
                 max="59"
-                step="5"
+                step="1"
                 value={esperaMinutos}
                 onChange={e => setEsperaMinutos(parseInt(e.target.value) || 0)}
                 className="w-full text-center bg-slate-950 border-y border-white/10 h-9 text-sm font-semibold text-white focus:outline-none"
@@ -236,7 +236,7 @@ export const ShiftForm: React.FC<ShiftFormProps> = ({ onSuccess }) => {
         <div className="relative">
           <input
             type="number"
-            step="0.1"
+            step="any"
             min="0"
             value={kilometros}
             onChange={e => setKilometros(e.target.value)}

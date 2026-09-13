@@ -128,7 +128,7 @@ export const AppIncomeForm: React.FC<AppIncomeFormProps> = ({ onSuccess }) => {
             <input
               type="number"
               min="0"
-              step="500"
+              step="any"
               placeholder="12000"
               value={tarifa}
               onChange={e => setTarifa(e.target.value)}
@@ -147,7 +147,7 @@ export const AppIncomeForm: React.FC<AppIncomeFormProps> = ({ onSuccess }) => {
             <input
               type="number"
               min="0"
-              step="500"
+              step="any"
               placeholder="3000"
               value={propina}
               onChange={e => setPropina(e.target.value)}
@@ -192,7 +192,7 @@ export const AppIncomeForm: React.FC<AppIncomeFormProps> = ({ onSuccess }) => {
               <input
                 type="number"
                 min="0"
-                step="500"
+                step="any"
                 placeholder="45000"
                 value={montoCobradoEfectivo}
                 onChange={e => setMontoCobradoEfectivo(e.target.value)}
