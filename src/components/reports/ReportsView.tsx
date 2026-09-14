@@ -47,7 +47,7 @@ const EXPENSE_CATEGORY_COLORS: Record<string, string> = {
 
 export const ReportsView: React.FC = () => {
   const { shifts, transactions } = useAppData();
-  const [groupBy, setGroupBy] = useState<'semana' | 'mes'>('semana');
+  const [groupBy, setGroupBy] = useState<'dia' | 'semana' | 'mes'>('dia');
   const [viewMode, setViewMode] = useState<'combinada' | 'graficas' | 'tabla'>('combinada');
 
   const reports = useMemo(() => {
@@ -215,8 +215,18 @@ export const ReportsView: React.FC = () => {
             </button>
           </div>
 
-          {/* Toggle Semana / Mes */}
+          {/* Toggle Día / Semana / Mes */}
           <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-white/10">
+            <button
+              onClick={() => setGroupBy('dia')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                groupBy === 'dia'
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Día a Día
+            </button>
             <button
               onClick={() => setGroupBy('semana')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
@@ -299,7 +309,7 @@ export const ReportsView: React.FC = () => {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
                   <BarChart3 className="w-4 h-4 text-cyan-500" />
-                  Evolución Financiera por {groupBy === 'semana' ? 'Semanas' : 'Meses'}
+                  Evolución Financiera por {groupBy === 'dia' ? 'Días' : groupBy === 'semana' ? 'Semanas' : 'Meses'}
                 </h3>
                 <span className="text-[11px] font-semibold text-slate-400">
                   Ingresos vs Gastos vs Superávit
@@ -309,7 +319,7 @@ export const ReportsView: React.FC = () => {
               {chronologicalReports.length > 0 ? (
                 <div className="h-72 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chronologicalReports} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                    <BarChart data={chronologicalReports} barGap={4} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} vertical={false} />
                       <XAxis
                         dataKey="periodo"
@@ -454,6 +464,8 @@ export const ReportsView: React.FC = () => {
                       strokeWidth={3}
                       fillOpacity={1}
                       fill="url(#colorRendimiento)"
+                      dot={{ r: 5, fill: '#06b6d4', stroke: '#ffffff', strokeWidth: 2 }}
+                      activeDot={{ r: 7 }}
                     />
                   </AreaChart>
                 </ResponsiveContainer>

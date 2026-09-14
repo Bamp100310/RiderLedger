@@ -269,7 +269,7 @@ export interface ConsolidatedPeriodReport {
 export function generateConsolidatedReport(
   shifts: Shift[],
   transactions: Transaction[],
-  groupBy: 'semana' | 'mes'
+  groupBy: 'dia' | 'semana' | 'mes'
 ): ConsolidatedPeriodReport[] {
   const map = new Map<string, {
     label: string;
@@ -287,7 +287,16 @@ export function generateConsolidatedReport(
   // Función para obtener la clave de grupo
   const getGroupKey = (dateStr: string): { key: string; label: string } => {
     const d = new Date(`${dateStr}T00:00:00`);
-    if (groupBy === 'mes') {
+    if (groupBy === 'dia') {
+      const parts = dateStr.split('-');
+      const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+      const dayName = days[d.getDay()];
+      const formattedDay = parts.length === 3 ? `${parts[2]}/${parts[1]}` : dateStr;
+      return {
+        key: dateStr,
+        label: `${dayName} ${formattedDay}`
+      };
+    } else if (groupBy === 'mes') {
       const year = d.getFullYear();
       const month = d.getMonth();
       const monthNames = [
@@ -592,27 +601,47 @@ export function getStackedFinancialData(
 
   const sortedTx = [...transactions].sort((a, b) => a.fecha.localeCompare(b.fecha));
 
+  // Determinar si los datos históricos abarcan un período muy extenso
+  const uniqueDates = Array.from(new Set(sortedTx.map(t => t.fecha)));
+  const isMultiMonthSpan = uniqueDates.length > 40;
+
   for (const t of sortedTx) {
     let key = t.fecha;
     const monto = Number(t.monto) || 0;
+    const parts = t.fecha.split('-');
 
     if (range === 'hoy') {
-      // Mostrar cada fecha por día (DD/MM) para que se vean los días recientes
-      const parts = t.fecha.split('-');
-      key = parts.length === 3 ? `${parts[2]}/${parts[1]}` : t.fecha;
+      const todayStr = getLocalDateString();
+      if (parts.length === 3) {
+        const dateObj = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        const isToday = t.fecha === todayStr;
+        key = isToday ? `${days[dateObj.getDay()]} ${parts[2]} (Hoy)` : `${days[dateObj.getDay()]} ${parts[2]}`;
+      }
     } else if (range === 'semana') {
-      const parts = t.fecha.split('-');
       if (parts.length === 3) {
         const dateObj = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
         const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
         key = `${days[dateObj.getDay()]} ${parts[2]}`;
       }
     } else if (range === 'mes') {
-      const parts = t.fecha.split('-');
-      key = parts.length === 3 ? `${parts[2]}/${parts[1]}` : t.fecha;
+      if (parts.length === 3) {
+        const dateObj = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        key = `${days[dateObj.getDay()]} ${parts[2]}`;
+      }
     } else if (range === 'historico') {
-      const parts = t.fecha.split('-');
-      key = parts.length >= 2 ? `${parts[1]}/${parts[0].slice(2)}` : t.fecha;
+      if (isMultiMonthSpan) {
+        key = parts.length >= 2 ? `${parts[1]}/${parts[0].slice(2)}` : t.fecha;
+      } else {
+        if (parts.length === 3) {
+          const dateObj = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+          const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+          key = `${days[dateObj.getDay()]} ${parts[2]}/${parts[1]}`;
+        }
+      }
+    } else {
+      key = parts.length === 3 ? `${parts[2]}/${parts[1]}` : t.fecha;
     }
 
     const item = getOrCreate(key);
@@ -647,7 +676,7 @@ export function getStackedFinancialData(
     item.Neto = item.TotalIngresos - item.TotalGastos;
   }
 
-  return Array.from(map.values()).slice(-12);
+  return Array.from(map.values()).slice(-20);
 }
 
 export interface DistributionSlice {

@@ -287,9 +287,13 @@ export const ExecutiveDashboard: React.FC = () => {
                 Flujo Financiero Desglosado
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                {chartMode === 'stacked'
-                  ? 'Composición apilada: Domicilios y Pasajeros vs. Combustible y Alimentación'
-                  : 'Evolución continua de Ingresos, Gastos y Margen Neto en el tiempo'}
+                {filter.range === 'hoy'
+                  ? 'Evolución de las jornadas recientes (con corte al día de hoy)'
+                  : filter.range === 'semana'
+                  ? 'Evolución día a día de esta semana'
+                  : filter.range === 'mes'
+                  ? 'Evolución día a día de este mes'
+                  : 'Histórico completo de jornadas registradas'}
               </p>
             </div>
 
@@ -327,7 +331,7 @@ export const ExecutiveDashboard: React.FC = () => {
             {stackedData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 {chartMode === 'stacked' ? (
-                  <BarChart data={stackedData} margin={{ top: 15, right: 10, left: -20, bottom: 0 }}>
+                  <BarChart data={stackedData} barGap={4} margin={{ top: 15, right: 10, left: -20, bottom: 0 }}>
                     <XAxis dataKey="periodo" stroke="#94a3b8" fontSize={11} tickLine={false} />
                     <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} tickFormatter={v => `$${Math.round(v/1000)}k`} />
                     <Tooltip
@@ -362,12 +366,14 @@ export const ExecutiveDashboard: React.FC = () => {
                       }}
                     />
                     <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                    <Bar dataKey="Domicilios" stackId="ingresos" fill="#0284c7" name="Domicilios" radius={[0, 0, 0, 0]} maxBarSize={20} />
-                    <Bar dataKey="Pasajeros" stackId="ingresos" fill="#8b5cf6" name="Pasajeros" radius={[4, 4, 0, 0]} maxBarSize={20} />
-                    <Bar dataKey="Combustible" stackId="gastos" fill="#f59e0b" name="Gasolina" radius={[0, 0, 0, 0]} maxBarSize={20} />
-                    <Bar dataKey="Acompanante" stackId="gastos" fill="#6366f1" name="Jhony (Acompañante)" radius={[0, 0, 0, 0]} maxBarSize={20} />
-                    <Bar dataKey="Alimentacion" stackId="gastos" fill="#ec4899" name="Alimentación" radius={[0, 0, 0, 0]} maxBarSize={20} />
-                    <Bar dataKey="Mantenimiento" stackId="gastos" fill="#ef4444" name="Mantenimiento" radius={[4, 4, 0, 0]} maxBarSize={20} />
+                    <Bar dataKey="Domicilios" stackId="ingresos" fill="#0284c7" name="Domicilios" radius={[0, 0, 0, 0]} maxBarSize={32} />
+                    <Bar dataKey="Pasajeros" stackId="ingresos" fill="#8b5cf6" name="Pasajeros" radius={[0, 0, 0, 0]} maxBarSize={32} />
+                    <Bar dataKey="OtrosIngresos" stackId="ingresos" fill="#10b981" name="Otros Ingresos" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                    <Bar dataKey="Combustible" stackId="gastos" fill="#f59e0b" name="Gasolina" radius={[0, 0, 0, 0]} maxBarSize={32} />
+                    <Bar dataKey="Acompanante" stackId="gastos" fill="#6366f1" name="Jhony (Acompañante)" radius={[0, 0, 0, 0]} maxBarSize={32} />
+                    <Bar dataKey="Alimentacion" stackId="gastos" fill="#ec4899" name="Alimentación" radius={[0, 0, 0, 0]} maxBarSize={32} />
+                    <Bar dataKey="Mantenimiento" stackId="gastos" fill="#ef4444" name="Mantenimiento" radius={[0, 0, 0, 0]} maxBarSize={32} />
+                    <Bar dataKey="OtrosGastos" stackId="gastos" fill="#64748b" name="Otros Gastos" radius={[4, 4, 0, 0]} maxBarSize={32} />
                   </BarChart>
                 ) : (
                   <AreaChart data={stackedData} margin={{ top: 15, right: 10, left: -20, bottom: 0 }}>
@@ -386,11 +392,17 @@ export const ExecutiveDashboard: React.FC = () => {
                     <Tooltip
                       content={({ active, payload, label }) => {
                         if (active && payload && payload.length) {
+                          const inc = Number(payload[0]?.value) || 0;
+                          const exp = Number(payload[1]?.value) || 0;
+                          const net = inc - exp;
                           return (
-                            <div className="app-card bg-slate-950/95 text-white text-xs p-3 rounded-xl shadow-xl border border-white/10 space-y-1">
-                              <p className="font-bold text-cyan-400">{label}</p>
-                              <p className="text-emerald-400">Ingresos: {formatCurrency(payload[0]?.value as number || 0)}</p>
-                              <p className="text-rose-400">Gastos: {formatCurrency(payload[1]?.value as number || 0)}</p>
+                            <div className="app-card bg-slate-950/95 text-white text-xs p-3 rounded-xl shadow-xl border border-white/10 space-y-1 min-w-[180px]">
+                              <p className="font-bold text-cyan-400 border-b border-white/10 pb-1">{label}</p>
+                              <p className="text-emerald-400 flex justify-between"><span>Ingresos:</span> <b>{formatCurrency(inc)}</b></p>
+                              <p className="text-rose-400 flex justify-between"><span>Gastos:</span> <b>{formatCurrency(exp)}</b></p>
+                              <p className={`pt-1 border-t border-white/10 flex justify-between font-bold ${net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                <span>Margen Neto:</span> <b>{formatCurrency(net)}</b>
+                              </p>
                             </div>
                           );
                         }
@@ -398,8 +410,28 @@ export const ExecutiveDashboard: React.FC = () => {
                       }}
                     />
                     <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                    <Area type="monotone" dataKey="TotalIngresos" stroke="#0284c7" strokeWidth={2.5} fillOpacity={1} fill="url(#ingresosGrad)" name="Ingresos Totales" />
-                    <Area type="monotone" dataKey="TotalGastos" stroke="#ef4444" strokeWidth={2.5} fillOpacity={1} fill="url(#gastosGrad)" name="Gastos Totales" />
+                    <Area
+                      type="monotone"
+                      dataKey="TotalIngresos"
+                      stroke="#0284c7"
+                      strokeWidth={2.5}
+                      fillOpacity={1}
+                      fill="url(#ingresosGrad)"
+                      name="Ingresos Totales"
+                      dot={{ r: 4, fill: '#0284c7', stroke: '#ffffff', strokeWidth: 1.5 }}
+                      activeDot={{ r: 6 }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="TotalGastos"
+                      stroke="#ef4444"
+                      strokeWidth={2.5}
+                      fillOpacity={1}
+                      fill="url(#gastosGrad)"
+                      name="Gastos Totales"
+                      dot={{ r: 4, fill: '#ef4444', stroke: '#ffffff', strokeWidth: 1.5 }}
+                      activeDot={{ r: 6 }}
+                    />
                   </AreaChart>
                 )}
               </ResponsiveContainer>
