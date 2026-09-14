@@ -1,6 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAppData } from '../../context/AppDataContext';
-import { formatCurrency, formatCurrencyCompact } from '../../lib/calculations';
+import {
+  formatCurrency,
+  formatCurrencyCompact,
+  getPeriodFinancialChartData
+} from '../../lib/calculations';
 import {
   ResponsiveContainer,
   BarChart,
@@ -11,83 +15,98 @@ import {
   Legend,
   PieChart,
   Pie,
-  Cell
+  Cell,
+  CartesianGrid
 } from 'recharts';
-import { BarChart3, PieChart as PieIcon } from 'lucide-react';
+import { BarChart3, PieChart as PieIcon, Layers, Calendar } from 'lucide-react';
 
-const EXPENSE_COLORS = ['#f59e0b', '#f97316', '#06b6d4', '#ec4899', '#8b5cf6'];
-const INCOME_COLORS = ['#10b981', '#06b6d4', '#f59e0b', '#3b82f6', '#8b5cf6'];
+const EXPENSE_COLORS: Record<string, string> = {
+  'Gasolina': '#f59e0b',
+  'Acompañante (Jhony)': '#6366f1',
+  'Honorarios Jhony': '#6366f1',
+  'Alimentación': '#ec4899',
+  'Mantenimiento': '#8b5cf6',
+  'Cuota Crédito': '#06b6d4',
+  'Otros Gastos': '#64748b'
+};
+
+const PIE_PALETTE = ['#f59e0b', '#6366f1', '#ec4899', '#8b5cf6', '#06b6d4', '#10b981', '#f43f5e', '#64748b'];
 
 export const ChartsSection: React.FC = () => {
-  const { filteredTransactions } = useAppData();
-  const [activeChartTab, setActiveChartTab] = useState<'comparativo' | 'gastos' | 'ingresos'>('comparativo');
+  const { filteredTransactions, filter } = useAppData();
+  const [activeChartTab, setActiveChartTab] = useState<'comparativo' | 'apilado' | 'gastos' | 'ingresos'>('comparativo');
+  const [historicalGranularity, setHistoricalGranularity] = useState<'dia' | 'semana' | 'mes'>('mes');
 
-  // 1. Preparar datos para Gráfico de Barras (Ingresos vs Gastos por Fecha)
-  const barDataMap = new Map<string, { fecha: string; label: string; Ingresos: number; Gastos: number }>();
+  // Obtener datos del período estricto sin recortes artificiales (slice -10 eliminado)
+  const chartData = useMemo(() => {
+    return getPeriodFinancialChartData(filteredTransactions, filter.range, historicalGranularity);
+  }, [filteredTransactions, filter.range, historicalGranularity]);
 
-  // Ordenar transacciones por fecha ascendente para la gráfica
-  const sortedTx = [...filteredTransactions].sort((a, b) => a.fecha.localeCompare(b.fecha));
+  // Donut: Distribución de Gastos
+  const expensePieData = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const t of filteredTransactions) {
+      if (t.tipo === 'GASTO') {
+        let cat = 'Otros Gastos';
+        if (t.categoria === 'COMBUSTIBLE') cat = 'Gasolina';
+        else if (
+          t.categoria === 'HONORARIOS_ACOMPANANTE' ||
+          (t.subcategoria && (t.subcategoria.toLowerCase().includes('acompañante') || t.subcategoria.toLowerCase().includes('jhony')))
+        ) cat = 'Acompañante (Jhony)';
+        else if (t.categoria === 'ALIMENTACION') cat = 'Alimentación';
+        else if (t.categoria === 'MANTENIMIENTO_MOTO') cat = 'Mantenimiento';
+        else if (t.categoria === 'CUOTA_CREDITO') cat = 'Cuota Crédito';
 
-  for (const t of sortedTx) {
-    const fecha = t.fecha;
-    if (!barDataMap.has(fecha)) {
-      const parts = fecha.split('-');
-      const label = parts.length === 3 ? `${parts[2]}/${parts[1]}` : fecha;
-      barDataMap.set(fecha, { fecha, label, Ingresos: 0, Gastos: 0 });
+        map.set(cat, (map.get(cat) || 0) + (Number(t.monto) || 0));
+      }
     }
-    const item = barDataMap.get(fecha)!;
-    const monto = Number(t.monto) || 0;
-    if (t.tipo === 'INGRESO') {
-      item.Ingresos += monto;
-    } else if (t.tipo === 'GASTO') {
-      item.Gastos += monto;
+    return Array.from(map.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [filteredTransactions]);
+
+  // Donut: Distribución de Ingresos por Fuente / App
+  const incomePieData = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const t of filteredTransactions) {
+      if (t.tipo === 'INGRESO') {
+        const source = t.subcategoria || (t.categoria === 'DOMICILIOS' ? 'Domicilios' : t.categoria === 'PASAJEROS' ? 'Pasajeros' : 'Otros Ingresos');
+        map.set(source, (map.get(source) || 0) + (Number(t.monto) || 0));
+      }
     }
-  }
+    return Array.from(map.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [filteredTransactions]);
 
-  const barChartData = Array.from(barDataMap.values()).slice(-10); // últimos 10 días para buena legibilidad móvil
-
-  // 2. Preparar datos para Gráfico de Dona: Distribución de Gastos
-  const expenseMap = new Map<string, number>();
-  for (const t of filteredTransactions) {
-    if (t.tipo === 'GASTO') {
-      const cat = t.categoria === 'COMBUSTIBLE'
-        ? 'Gasolina'
-        : (t.categoria === 'HONORARIOS_ACOMPANANTE' || t.subcategoria?.toLowerCase().includes('jhony') || t.subcategoria?.toLowerCase().includes('acompañante'))
-        ? 'Acompañante (Jhony)'
-        : t.categoria === 'ALIMENTACION'
-        ? 'Alimentación'
-        : t.categoria === 'MANTENIMIENTO_MOTO'
-        ? 'Mantenimiento'
-        : 'Otros Gastos';
-      expenseMap.set(cat, (expenseMap.get(cat) || 0) + Number(t.monto));
-    }
-  }
-  const expensePieData = Array.from(expenseMap.entries())
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value);
-
-  // 3. Preparar datos para Gráfico de Dona: Distribución de Ingresos
-  const incomeMap = new Map<string, number>();
-  for (const t of filteredTransactions) {
-    if (t.tipo === 'INGRESO') {
-      const source = t.subcategoria || t.categoria;
-      incomeMap.set(source, (incomeMap.get(source) || 0) + Number(t.monto));
-    }
-  }
-  const incomePieData = Array.from(incomeMap.entries())
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value);
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomBarTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
+      const dataItem = payload[0]?.payload;
       return (
-        <div className="bg-slate-900 border border-white/20 p-2.5 rounded-xl shadow-xl text-xs space-y-1">
-          <p className="font-bold text-white border-b border-white/10 pb-1">{label}</p>
+        <div className="bg-slate-900 border border-white/20 p-3 rounded-2xl shadow-2xl text-xs space-y-1.5 min-w-[170px]">
+          <div className="border-b border-white/10 pb-1 flex items-center justify-between">
+            <span className="font-bold text-white">{dataItem?.periodo || label}</span>
+            {dataItem?.sinActividad && (
+              <span className="text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">Sin turnos</span>
+            )}
+          </div>
           {payload.map((entry: any, index: number) => (
-            <p key={`item-${index}`} style={{ color: entry.color }} className="font-semibold">
-              {entry.name}: {formatCurrency(entry.value)}
-            </p>
+            <div key={`item-${index}`} className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1 text-slate-300">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                {entry.name}:
+              </span>
+              <span className="font-extrabold text-white">{formatCurrency(entry.value)}</span>
+            </div>
           ))}
+          {dataItem && (
+            <div className="border-t border-white/10 pt-1 flex items-center justify-between font-bold">
+              <span className="text-slate-400">Superávit:</span>
+              <span className={dataItem.Superavit >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                {formatCurrency(dataItem.Superavit)}
+              </span>
+            </div>
+          )}
         </div>
       );
     }
@@ -109,53 +128,116 @@ export const ChartsSection: React.FC = () => {
 
   return (
     <div className="bg-slate-900/80 border border-white/10 rounded-3xl p-4 sm:p-5 space-y-4">
-      {/* Selector de tipo de gráfica */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="text-xs font-black uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-          <BarChart3 className="w-4 h-4 text-emerald-400" />
-          Análisis Visual
-        </h3>
-        <div className="flex gap-1 p-0.5 bg-slate-950 rounded-xl border border-white/10">
-          <button
-            onClick={() => setActiveChartTab('comparativo')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-              activeChartTab === 'comparativo'
-                ? 'bg-slate-800 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Ingresos vs Gastos
-          </button>
-          <button
-            onClick={() => setActiveChartTab('gastos')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-              activeChartTab === 'gastos'
-                ? 'bg-slate-800 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Gastos
-          </button>
-          <button
-            onClick={() => setActiveChartTab('ingresos')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-              activeChartTab === 'ingresos'
-                ? 'bg-slate-800 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Ingresos
-          </button>
+      {/* Header y Selectores */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h3 className="text-xs font-black uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+            <BarChart3 className="w-4 h-4 text-emerald-400" />
+            Evolución y Rendimiento Visual
+          </h3>
+          {filter.range === 'semana' && (
+            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-bold">
+              Lun → Dom
+            </span>
+          )}
+          {filter.range === 'mes' && (
+            <span className="text-[10px] bg-sky-500/10 text-sky-400 px-2 py-0.5 rounded-full font-bold">
+              Mes Completo
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Selector de Granularidad Histórica si el filtro es histórico */}
+          {filter.range === 'historico' && (
+            <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-xl border border-white/10 text-[11px]">
+              <span className="text-slate-500 px-1.5 flex items-center gap-1">
+                <Calendar className="w-3 h-3" />
+              </span>
+              <button
+                type="button"
+                onClick={() => setHistoricalGranularity('dia')}
+                className={`px-2 py-1 rounded-lg font-bold transition-all ${
+                  historicalGranularity === 'dia' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Día
+              </button>
+              <button
+                type="button"
+                onClick={() => setHistoricalGranularity('semana')}
+                className={`px-2 py-1 rounded-lg font-bold transition-all ${
+                  historicalGranularity === 'semana' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Semana
+              </button>
+              <button
+                type="button"
+                onClick={() => setHistoricalGranularity('mes')}
+                className={`px-2 py-1 rounded-lg font-bold transition-all ${
+                  historicalGranularity === 'mes' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Mes
+              </button>
+            </div>
+          )}
+
+          {/* Selector de pestañas de gráfico */}
+          <div className="flex gap-1 p-0.5 bg-slate-950 rounded-xl border border-white/10">
+            <button
+              onClick={() => setActiveChartTab('comparativo')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                activeChartTab === 'comparativo'
+                  ? 'bg-slate-800 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Comparativo
+            </button>
+            <button
+              onClick={() => setActiveChartTab('apilado')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                activeChartTab === 'apilado'
+                  ? 'bg-slate-800 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <span className="hidden sm:inline">Desglose </span>Apilado
+            </button>
+            <button
+              onClick={() => setActiveChartTab('gastos')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                activeChartTab === 'gastos'
+                  ? 'bg-slate-800 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Gastos
+            </button>
+            <button
+              onClick={() => setActiveChartTab('ingresos')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                activeChartTab === 'ingresos'
+                  ? 'bg-slate-800 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Ingresos
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* 1. Gráfico de Barras Comparativo */}
+      {/* 1. Gráfico de Barras Comparativo (Ingresos vs Gastos) */}
       {activeChartTab === 'comparativo' && (
         <div className="h-64 w-full">
-          {barChartData.length > 0 ? (
+          {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barChartData} margin={{ top: 10, right: 5, left: -20, bottom: 0 }}>
-                <XAxis dataKey="label" stroke="#64748b" fontSize={11} tickLine={false} />
+              <BarChart data={chartData} margin={{ top: 10, right: 5, left: -15, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} />
+                <XAxis dataKey="periodo" stroke="#64748b" fontSize={11} tickLine={false} />
                 <YAxis
                   stroke="#64748b"
                   fontSize={10}
@@ -163,15 +245,15 @@ export const ChartsSection: React.FC = () => {
                   tickLine={false}
                   axisLine={false}
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<CustomBarTooltip />} />
                 <Legend
                   verticalAlign="top"
                   align="right"
                   iconType="circle"
                   wrapperStyle={{ fontSize: '11px', paddingBottom: '10px' }}
                 />
-                <Bar dataKey="Ingresos" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                <Bar dataKey="Gastos" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                <Bar dataKey="Ingresos" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={30} />
+                <Bar dataKey="Gastos" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={30} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -182,12 +264,56 @@ export const ChartsSection: React.FC = () => {
         </div>
       )}
 
-      {/* 2. Gráfico de Dona: Gastos */}
+      {/* 2. Gráfico Apilado por Categorías Reales */}
+      {activeChartTab === 'apilado' && (
+        <div className="h-64 w-full">
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 10, right: 5, left: -15, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} />
+                <XAxis dataKey="periodo" stroke="#64748b" fontSize={11} tickLine={false} />
+                <YAxis
+                  stroke="#64748b"
+                  fontSize={10}
+                  tickFormatter={val => formatCurrencyCompact(val)}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip content={<CustomBarTooltip />} />
+                <Legend
+                  verticalAlign="top"
+                  align="right"
+                  iconType="circle"
+                  wrapperStyle={{ fontSize: '10px', paddingBottom: '10px' }}
+                />
+                {/* Ingresos Apilados */}
+                <Bar dataKey="Domicilios" stackId="ingresos" fill="#10b981" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="Pasajeros" stackId="ingresos" fill="#06b6d4" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="OtrosIngresos" stackId="ingresos" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+
+                {/* Gastos Apilados */}
+                <Bar dataKey="Combustible" stackId="gastos" fill="#f59e0b" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="Acompanante" stackId="gastos" fill="#6366f1" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="Alimentacion" stackId="gastos" fill="#ec4899" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="Mantenimiento" stackId="gastos" fill="#8b5cf6" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="CuotaCredito" stackId="gastos" fill="#0ea5e9" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="OtrosGastos" stackId="gastos" fill="#64748b" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full flex items-center justify-center text-xs text-slate-500">
+              Sin datos para este rango
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 3. Gráfico de Dona: Gastos con etiquetas claras */}
       {activeChartTab === 'gastos' && (
         <div className="h-64 w-full">
           {expensePieData.length > 0 ? (
             <div className="flex flex-col sm:flex-row items-center justify-center h-full gap-4">
-              <div className="w-48 h-48">
+              <div className="w-44 h-44">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -197,26 +323,29 @@ export const ChartsSection: React.FC = () => {
                       cx="50%"
                       cy="50%"
                       innerRadius={45}
-                      outerRadius={75}
+                      outerRadius={70}
                       paddingAngle={4}
                     >
-                      {expensePieData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={EXPENSE_COLORS[index % EXPENSE_COLORS.length]} />
+                      {expensePieData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={EXPENSE_COLORS[entry.name] || PIE_PALETTE[index % PIE_PALETTE.length]}
+                        />
                       ))}
                     </Pie>
                     <Tooltip content={<CustomPieTooltip />} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="flex flex-wrap sm:flex-col gap-2 max-w-xs text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-1 gap-x-3 gap-y-1.5 max-w-sm text-xs">
                 {expensePieData.map((entry, idx) => (
                   <div key={entry.name} className="flex items-center gap-2">
                     <span
-                      className="w-3 h-3 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: EXPENSE_COLORS[idx % EXPENSE_COLORS.length] }}
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: EXPENSE_COLORS[entry.name] || PIE_PALETTE[idx % PIE_PALETTE.length] }}
                     />
                     <span className="text-slate-300 truncate">{entry.name}:</span>
-                    <span className="font-bold text-white">{formatCurrency(entry.value)}</span>
+                    <span className="font-bold text-white ml-auto">{formatCurrency(entry.value)}</span>
                   </div>
                 ))}
               </div>
@@ -229,12 +358,12 @@ export const ChartsSection: React.FC = () => {
         </div>
       )}
 
-      {/* 3. Gráfico de Dona: Ingresos */}
+      {/* 4. Gráfico de Dona: Ingresos */}
       {activeChartTab === 'ingresos' && (
         <div className="h-64 w-full">
           {incomePieData.length > 0 ? (
             <div className="flex flex-col sm:flex-row items-center justify-center h-full gap-4">
-              <div className="w-48 h-48">
+              <div className="w-44 h-44">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -244,26 +373,26 @@ export const ChartsSection: React.FC = () => {
                       cx="50%"
                       cy="50%"
                       innerRadius={45}
-                      outerRadius={75}
+                      outerRadius={70}
                       paddingAngle={4}
                     >
                       {incomePieData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={INCOME_COLORS[index % INCOME_COLORS.length]} />
+                        <Cell key={`cell-${index}`} fill={PIE_PALETTE[index % PIE_PALETTE.length]} />
                       ))}
                     </Pie>
                     <Tooltip content={<CustomPieTooltip />} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="flex flex-wrap sm:flex-col gap-2 max-w-xs text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-1 gap-x-3 gap-y-1.5 max-w-sm text-xs">
                 {incomePieData.map((entry, idx) => (
                   <div key={entry.name} className="flex items-center gap-2">
                     <span
-                      className="w-3 h-3 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: INCOME_COLORS[idx % INCOME_COLORS.length] }}
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: PIE_PALETTE[idx % PIE_PALETTE.length] }}
                     />
                     <span className="text-slate-300 truncate">{entry.name}:</span>
-                    <span className="font-bold text-white">{formatCurrency(entry.value)}</span>
+                    <span className="font-bold text-white ml-auto">{formatCurrency(entry.value)}</span>
                   </div>
                 ))}
               </div>

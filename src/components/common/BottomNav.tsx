@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, FileSpreadsheet, Plus, Bike, CalendarClock } from 'lucide-react';
+import { LayoutDashboard, FileSpreadsheet, Plus, HeartPulse, CalendarClock } from 'lucide-react';
 import { useAppData } from '../../context/AppDataContext';
 
 export const BottomNav: React.FC = () => {
@@ -8,10 +8,10 @@ export const BottomNav: React.FC = () => {
 
   const navItems = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/reportes', label: 'Reportes', icon: FileSpreadsheet },
+    { to: '/salud-financiera', label: 'Salud', icon: HeartPulse },
     { isAction: true, label: 'Registrar', icon: Plus },
+    { to: '/reportes', label: 'Reportes', icon: FileSpreadsheet },
     { to: '/creditos', label: 'Créditos', icon: CalendarClock, badge: creditAnalysis.alertaVencimientoCercano },
-    { to: '/turnos', label: 'Turnos', icon: Bike },
   ];
 
   return (

@@ -3,6 +3,7 @@ import { CreditInstallment } from '../../types';
 import { useAppData } from '../../context/AppDataContext';
 import { formatCurrency } from '../../lib/calculations';
 import { EditCreditModal } from './EditCreditModal';
+import { CreditCardsSection } from './CreditCardsSection';
 import {
   CalendarClock,
   Plus,
@@ -28,6 +29,7 @@ export const CreditsView: React.FC = () => {
     requestNotificationPermission
   } = useAppData();
 
+  const [activeTab, setActiveTab] = useState<'cuotas' | 'tarjetas'>('cuotas');
   const [editingCredit, setEditingCredit] = useState<CreditInstallment | null>(null);
   const [nombre, setNombre] = useState('');
   const [montoCuota, setMontoCuota] = useState('');
@@ -72,38 +74,72 @@ export const CreditsView: React.FC = () => {
         <div>
           <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
             <CalendarClock className="w-5 h-5 text-cyan-500" />
-            Control de Créditos y Cuotas (Días 10 y 30)
+            Gestión de Pasivos y Deuda
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Calcula si lo generado en tus jornadas cubre tus cuotas pendientes y recibe recordatorios.
+            Control de cuotas fijas (10 y 30) y monitoreo de tarjetas de crédito con alerta del 30%.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Botón Activar Recordatorios */}
-          <button
-            onClick={handleRequestNotif}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
-              notifGranted
-                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/25'
-            }`}
-          >
-            <Bell className="w-3.5 h-3.5" />
-            <span>{notifGranted ? 'Recordatorios Activos' : 'Activar Alertas (10 y 30)'}</span>
-          </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Selector de pestañas */}
+          <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-white/10">
+            <button
+              onClick={() => setActiveTab('cuotas')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'cuotas'
+                  ? 'bg-cyan-500 text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <CalendarClock className="w-3.5 h-3.5" />
+              <span>Cuotas (10 y 30)</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('tarjetas')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'tarjetas'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <CreditCard className="w-3.5 h-3.5" />
+              <span>Tarjetas de Crédito</span>
+            </button>
+          </div>
 
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-white text-xs font-bold shadow-md shadow-cyan-500/20 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Nueva Cuota</span>
-          </button>
+          {activeTab === 'cuotas' && (
+            <>
+              {/* Botón Activar Recordatorios */}
+              <button
+                onClick={handleRequestNotif}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+                  notifGranted
+                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                    : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/25'
+                }`}
+              >
+                <Bell className="w-3.5 h-3.5" />
+                <span>{notifGranted ? 'Alertas Activas' : 'Alertas (10 y 30)'}</span>
+              </button>
+
+              <button
+                onClick={() => setShowAddForm(!showAddForm)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-white text-xs font-bold shadow-md shadow-cyan-500/20 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Nueva Cuota</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Tarjeta de Diagnóstico: "¿Te alcanza con lo generado?" */}
+      {activeTab === 'tarjetas' ? (
+        <CreditCardsSection />
+      ) : (
+        <>
+          {/* Tarjeta de Diagnóstico: "¿Te alcanza con lo generado?" */}
       <div className="app-card rounded-2xl p-5 border-l-4 border-l-cyan-500 shadow-md">
         <div className="flex flex-col sm:flex-row justify-between gap-4">
           <div>
@@ -341,6 +377,8 @@ export const CreditsView: React.FC = () => {
           )}
         </div>
       </div>
+        </>
+      )}
 
       {/* Modal para Editar Cuota */}
       <EditCreditModal

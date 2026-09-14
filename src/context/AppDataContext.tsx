@@ -8,6 +8,14 @@ import {
   TimeRange,
   CreditInstallment,
   CreditAnalysis,
+  CreditCardAccount,
+  CreditCardAnalysis,
+  FinancialSettings,
+  ThreeTierFinancials,
+  LaborHealthMetrics,
+  ExpenseHealthAnalysis,
+  SaveVsPayRecommendation,
+  DashboardInsight,
   ThemeMode,
   UserProfile,
   UserApp
@@ -27,6 +35,10 @@ import {
   generateDemoData,
   getStoredCredits,
   saveStoredCredits,
+  getStoredCreditCards,
+  saveStoredCreditCards,
+  getStoredFinancialSettings,
+  saveStoredFinancialSettings,
   getStoredTheme,
   saveStoredTheme,
   getStoredUsers,
@@ -37,7 +49,17 @@ import {
   saveStoredUserApps,
   getDefaultAppsForUser
 } from '../lib/storage';
-import { calculateFinancialSummary, isDateInRange, calculateCreditAnalysis } from '../lib/calculations';
+import {
+  calculateFinancialSummary,
+  isDateInRange,
+  calculateCreditAnalysis,
+  calculateThreeTierFinancials,
+  calculateLaborBenchmark,
+  analyzeExpenseHealth,
+  analyzeCreditCards,
+  recommendSaveVsPayDebt,
+  generateSmartInsights
+} from '../lib/calculations';
 import { getSupabaseClient, syncWithSupabase } from '../lib/supabase';
 
 interface AppDataContextType {
@@ -96,6 +118,24 @@ interface AppDataContextType {
   toggleCreditPaid: (id: string) => void;
   requestNotificationPermission: () => Promise<boolean>;
 
+  // Tarjetas de Crédito y Cuentas Revolventes
+  creditCards: CreditCardAccount[];
+  creditCardAnalysis: CreditCardAnalysis;
+  addCreditCard: (card: Omit<CreditCardAccount, 'id' | 'userId'>) => void;
+  updateCreditCard: (card: CreditCardAccount) => void;
+  deleteCreditCard: (id: string) => void;
+
+  // Metas y Referencias Financieras
+  financialSettings: FinancialSettings;
+  updateFinancialSettings: (settings: Partial<FinancialSettings>) => void;
+
+  // Motores de análisis del Copiloto Financiero
+  threeTierFinancials: ThreeTierFinancials;
+  laborBenchmark: LaborHealthMetrics;
+  expenseHealth: ExpenseHealthAnalysis;
+  saveVsPayRecommendation: SaveVsPayRecommendation;
+  smartInsights: DashboardInsight[];
+
   // Tema
   theme: ThemeMode;
   toggleTheme: () => void;
@@ -139,6 +179,14 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const [allCredits, setAllCredits] = useState<CreditInstallment[]>(() => {
     return getStoredCredits(activeUser.id);
+  });
+
+  const [allCreditCards, setAllCreditCards] = useState<CreditCardAccount[]>(() => {
+    return getStoredCreditCards();
+  });
+
+  const [financialSettings, setFinancialSettingsState] = useState<FinancialSettings>(() => {
+    return getStoredFinancialSettings();
   });
 
   const [filter, setFilter] = useState<DateFilter>(() => {
@@ -296,6 +344,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return allCredits.filter(c => !c.userId || c.userId === activeUser.id);
   }, [allCredits, activeUser.id]);
 
+  const creditCards = useMemo(() => {
+    return allCreditCards.filter(c => !c.userId || c.userId === activeUser.id);
+  }, [allCreditCards, activeUser.id]);
+
   // Filtrado temporal
   const filteredShifts = useMemo(() => {
     return shifts.filter(s => isDateInRange(s.fecha, filter.range, filter.startDate, filter.endDate));
@@ -312,6 +364,46 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const creditAnalysis = useMemo(() => {
     return calculateCreditAnalysis(credits, summary.superavitNeto);
   }, [credits, summary.superavitNeto]);
+
+  // Motores analíticos del Copiloto Financiero
+  const threeTierFinancials = useMemo(() => {
+    return calculateThreeTierFinancials(filteredTransactions, filteredShifts, credits, creditCards);
+  }, [filteredTransactions, filteredShifts, credits, creditCards]);
+
+  const creditCardAnalysis = useMemo(() => {
+    return analyzeCreditCards(creditCards);
+  }, [creditCards]);
+
+  const laborBenchmark = useMemo(() => {
+    return calculateLaborBenchmark(filteredShifts, filteredTransactions, financialSettings);
+  }, [filteredShifts, filteredTransactions, financialSettings]);
+
+  const expenseHealth = useMemo(() => {
+    return analyzeExpenseHealth(filteredTransactions, [], financialSettings);
+  }, [filteredTransactions, financialSettings]);
+
+  const saveVsPayRecommendation = useMemo(() => {
+    return recommendSaveVsPayDebt(
+      threeTierFinancials.flujoDisponible,
+      credits,
+      creditCards,
+      financialSettings.metaAhorroMensual || 300000,
+      threeTierFinancials.gastosOperativos,
+      financialSettings
+    );
+  }, [threeTierFinancials.flujoDisponible, threeTierFinancials.gastosOperativos, credits, creditCards, financialSettings]);
+
+  const smartInsights = useMemo(() => {
+    return generateSmartInsights(
+      threeTierFinancials,
+      laborBenchmark,
+      expenseHealth,
+      creditCardAnalysis,
+      saveVsPayRecommendation,
+      null,
+      financialSettings
+    );
+  }, [threeTierFinancials, laborBenchmark, expenseHealth, creditCardAnalysis, saveVsPayRecommendation, financialSettings]);
 
   const refreshPendingCount = useCallback(() => {
     setPendingSyncCount(getStoredSyncQueue().length);
@@ -642,6 +734,39 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return false;
   };
 
+  // Handlers para Tarjetas de Crédito y Cuentas Revolventes
+  const addCreditCard = useCallback((card: Omit<CreditCardAccount, 'id' | 'userId'>) => {
+    const newCard: CreditCardAccount = {
+      ...card,
+      id: `cc-${Date.now()}`,
+      userId: activeUser.id
+    };
+    const updated = [...allCreditCards, newCard];
+    setAllCreditCards(updated);
+    saveStoredCreditCards(updated);
+  }, [allCreditCards, activeUser.id]);
+
+  const updateCreditCard = useCallback((card: CreditCardAccount) => {
+    const updated = allCreditCards.map(c => c.id === card.id ? card : c);
+    setAllCreditCards(updated);
+    saveStoredCreditCards(updated);
+  }, [allCreditCards]);
+
+  const deleteCreditCard = useCallback((id: string) => {
+    const updated = allCreditCards.filter(c => c.id !== id);
+    setAllCreditCards(updated);
+    saveStoredCreditCards(updated);
+  }, [allCreditCards]);
+
+  // Handlers para Metas y Referencias Financieras
+  const updateFinancialSettings = useCallback((newSettings: Partial<FinancialSettings>) => {
+    setFinancialSettingsState(prev => {
+      const updated = { ...prev, ...newSettings };
+      saveStoredFinancialSettings(updated);
+      return updated;
+    });
+  }, []);
+
   const setFilterRange = (range: TimeRange, customStart?: string, customEnd?: string) => {
     const newFilter: DateFilter = { range, startDate: customStart, endDate: customEnd };
     setFilter(newFilter);
@@ -682,6 +807,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const otherShifts = allShifts.filter(s => s.userId !== activeUser.id);
     const otherTxs = allTransactions.filter(t => t.userId !== activeUser.id);
     const otherCredits = allCredits.filter(c => c.userId !== activeUser.id);
+    const otherCreditCards = allCreditCards.filter(c => c.userId !== activeUser.id);
 
     setAllShifts(otherShifts);
     saveStoredShifts(otherShifts);
@@ -689,6 +815,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     saveStoredTransactions(otherTxs);
     setAllCredits(otherCredits);
     saveStoredCredits(otherCredits);
+    setAllCreditCards(otherCreditCards);
+    saveStoredCreditCards(otherCreditCards);
   };
 
   return (
@@ -741,6 +869,18 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteCredit,
         toggleCreditPaid,
         requestNotificationPermission,
+        creditCards,
+        creditCardAnalysis,
+        addCreditCard,
+        updateCreditCard,
+        deleteCreditCard,
+        financialSettings,
+        updateFinancialSettings,
+        threeTierFinancials,
+        laborBenchmark,
+        expenseHealth,
+        saveVsPayRecommendation,
+        smartInsights,
         theme,
         toggleTheme,
         setTheme

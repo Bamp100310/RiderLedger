@@ -4,11 +4,13 @@ import {
   SyncQueueItem,
   SupabaseConfig,
   CreditInstallment,
+  CreditCardAccount,
+  FinancialSettings,
   ThemeMode,
   UserProfile,
   UserApp
 } from '../types';
-import { getLocalDateString } from './calculations';
+import { getLocalDateString, DEFAULT_FINANCIAL_SETTINGS } from './calculations';
 
 const STORAGE_KEYS = {
   SHIFTS: 'riderledger_shifts_v2',
@@ -17,6 +19,8 @@ const STORAGE_KEYS = {
   CONFIG: 'riderledger_supabase_config_v2',
   LAST_SYNC: 'riderledger_last_sync_v2',
   CREDITS: 'riderledger_credits_v2',
+  CREDIT_CARDS: 'riderledger_credit_cards_v2',
+  FINANCIAL_SETTINGS: 'riderledger_financial_settings_v2',
   THEME: 'riderledger_theme_v2',
   USERS: 'riderledger_users_v2',
   ACTIVE_USER: 'riderledger_active_user_v2',
@@ -201,6 +205,52 @@ export function getStoredCredits(userId?: string): CreditInstallment[] {
 export function saveStoredCredits(credits: CreditInstallment[]): void {
   localStorage.setItem(STORAGE_KEYS.CREDITS, JSON.stringify(credits));
 }
+
+// ==========================================
+// TARJETAS DE CRÉDITO Y CUENTAS REVOLVENTES
+// ==========================================
+export function getStoredCreditCards(userId?: string): CreditCardAccount[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.CREDIT_CARDS);
+    if (raw) {
+      const parsed: CreditCardAccount[] = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        if (userId) {
+          return parsed.filter(c => !c.userId || c.userId === userId);
+        }
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error('Error loading credit cards from storage', e);
+  }
+  return [];
+}
+
+export function saveStoredCreditCards(cards: CreditCardAccount[]): void {
+  localStorage.setItem(STORAGE_KEYS.CREDIT_CARDS, JSON.stringify(cards));
+}
+
+// ==========================================
+// METAS Y REFERENCIAS FINANCIERAS
+// ==========================================
+export function getStoredFinancialSettings(): FinancialSettings {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.FINANCIAL_SETTINGS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return { ...DEFAULT_FINANCIAL_SETTINGS, ...parsed };
+    }
+  } catch (e) {
+    console.error('Error loading financial settings from storage', e);
+  }
+  return { ...DEFAULT_FINANCIAL_SETTINGS };
+}
+
+export function saveStoredFinancialSettings(settings: FinancialSettings): void {
+  localStorage.setItem(STORAGE_KEYS.FINANCIAL_SETTINGS, JSON.stringify(settings));
+}
+
 
 // ==========================================
 // SUPABASE & CONFIG

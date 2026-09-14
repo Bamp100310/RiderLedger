@@ -3,7 +3,8 @@ import { useAppData } from '../../context/AppDataContext';
 import {
   formatCurrency,
   formatMinutes,
-  getStackedFinancialData,
+  getLocalDateString,
+  comparePeriods,
   getCategoryDistribution,
   getProductivityDeepMetrics
 } from '../../lib/calculations';
@@ -15,49 +16,90 @@ import {
   CalendarClock,
   Clock,
   Activity,
-  Gauge,
-  Plus,
   ArrowRight,
-  Layers,
-  LineChart as LineChartIcon,
   Sparkles,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon,
+  ShieldCheck,
+  AlertTriangle,
+  Lightbulb,
+  DollarSign,
+  HeartPulse,
+  CreditCard
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  AreaChart,
-  Area,
   PieChart,
   Pie,
   Cell,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend
+  Tooltip
 } from 'recharts';
 import { TimeRangeFilter } from './TimeRangeFilter';
+import { ChartsSection } from './ChartsSection';
 
 export const ExecutiveDashboard: React.FC = () => {
-  const { summary, creditAnalysis, filteredTransactions, transactions, filteredShifts, filter, openDrawer } = useAppData();
+  const {
+    summary,
+    creditAnalysis,
+    filteredTransactions,
+    transactions,
+    filteredShifts,
+    shifts,
+    filter,
+    threeTierFinancials,
+    laborBenchmark,
+    smartInsights,
+    creditCards,
+    creditCardAnalysis
+  } = useAppData();
 
-  const [chartMode, setChartMode] = useState<'stacked' | 'trend'>('stacked');
-
-  // Métricas avanzadas reales
+  // Métricas avanzadas reales de productividad
   const prodMetrics = useMemo(() => {
     return getProductivityDeepMetrics(filteredShifts, filteredTransactions, summary);
   }, [filteredShifts, filteredTransactions, summary]);
 
-  // Datos para gráfico de barras apiladas y tendencias
-  // Usamos transactions (todo el historial del usuario) para que la gráfica de barras apiladas y tendencias
-  // siempre muestre la evolución temporal de los diferentes días, sin colapsar a un único día si el filtro superior está en "Hoy"
-  const stackedData = useMemo(() => {
-    return getStackedFinancialData(transactions, filter.range);
-  }, [transactions, filter.range]);
+  // Comparación entre períodos con narrativa humana
+  const periodComparison = useMemo(() => {
+    if (filter.range === 'historico') return null;
+    const now = new Date();
+    let prevStart = '';
+    let prevEnd = '';
+    let periodName = 'período';
 
-  // Distribuciones de ingresos y egresos
+    if (filter.range === 'mes') {
+      periodName = 'Mes actual vs Mes anterior';
+      const curYear = now.getFullYear();
+      const curMonth = now.getMonth();
+      const prevMonthDate = new Date(curYear, curMonth - 1, 1, 12, 0, 0);
+      const prevYear = prevMonthDate.getFullYear();
+      const prevMonth = prevMonthDate.getMonth();
+      const lastDayPrev = new Date(prevYear, prevMonth + 1, 0).getDate();
+      prevStart = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-01`;
+      prevEnd = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(lastDayPrev).padStart(2, '0')}`;
+    } else if (filter.range === 'semana') {
+      periodName = 'Esta semana vs Semana anterior';
+      const dayOfWeek = now.getDay();
+      const distToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      const curMon = new Date(now.getFullYear(), now.getMonth(), now.getDate() - distToMonday, 12, 0, 0);
+      const prevMon = new Date(curMon.getFullYear(), curMon.getMonth(), curMon.getDate() - 7, 12, 0, 0);
+      const prevSun = new Date(curMon.getFullYear(), curMon.getMonth(), curMon.getDate() - 1, 12, 0, 0);
+      prevStart = getLocalDateString(prevMon);
+      prevEnd = getLocalDateString(prevSun);
+    } else if (filter.range === 'hoy') {
+      periodName = 'Hoy vs Ayer';
+      const yest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 12, 0, 0);
+      prevStart = getLocalDateString(yest);
+      prevEnd = prevStart;
+    }
+
+    if (!prevStart || !prevEnd) return null;
+
+    const prevTx = transactions.filter(t => t.fecha >= prevStart && t.fecha <= prevEnd);
+    const prevSh = shifts.filter(s => s.fecha >= prevStart && s.fecha <= prevEnd);
+    return comparePeriods(filteredTransactions, prevTx, filteredShifts, prevSh, periodName);
+  }, [filter.range, transactions, shifts, filteredTransactions, filteredShifts]);
+
+  // Distribuciones de ingresos y egresos para gráficos de dona
   const incomeDistribution = useMemo(() => {
     return getCategoryDistribution(filteredTransactions, 'INGRESO');
   }, [filteredTransactions]);
@@ -72,25 +114,12 @@ export const ExecutiveDashboard: React.FC = () => {
     ? Math.round((summary.superavitNeto / summary.ingresosTotales) * 100)
     : 0;
 
-  // Donut de tiempo activo vs espera
-  const timeDonutData = useMemo(() => {
-    const reparto = summary.totalMinutosReparto || 0;
-    const espera = summary.totalMinutosEspera || 0;
-    if (reparto === 0 && espera === 0) {
-      return [{ name: 'Sin jornada', value: 1, color: '#334155' }];
-    }
-    return [
-      { name: 'Reparto Activo', value: reparto, color: '#0284c7' },
-      { name: 'Tiempo de Espera', value: espera, color: '#64748b' }
-    ];
-  }, [summary.totalMinutosReparto, summary.totalMinutosEspera]);
-
   return (
     <div className="w-full max-w-[1600px] mx-auto space-y-5 px-1 sm:px-2">
       {/* 1. Selector de Rango Temporal Contextual */}
       <TimeRangeFilter />
 
-      {/* 2. Alerta de Cuota (si está próxima o vencida) */}
+      {/* 2. Alerta de Cuota si está próxima */}
       {creditAnalysis.alertaVencimientoCercano && (
         <div
           className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md transition-all ${
@@ -138,10 +167,109 @@ export const ExecutiveDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* 3. FILA 1: HERO METRICS — MÁXIMA JERARQUÍA VISUAL (4 Tarjetas Principales) */}
+      {/* 3. MODELO FINANCIERO DE 3 NIVELES (Estructura de Capital para Repartidores) */}
+      <div className="app-card rounded-3xl p-5 shadow-lg border border-cyan-500/20 bg-gradient-to-br from-slate-900 via-slate-900/95 to-slate-950 text-white relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-cyan-400 flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+              Modelo Financiero de 3 Niveles
+            </span>
+            <h2 className="text-base sm:text-lg font-black text-white mt-0.5">
+              Radiografía Financiera de tu Actividad
+            </h2>
+          </div>
+          <Link
+            to="/salud-financiera"
+            className="inline-flex items-center gap-1.5 text-xs font-extrabold text-cyan-400 hover:text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 px-3 py-1.5 rounded-xl border border-cyan-500/30 transition-all self-start sm:self-auto"
+          >
+            <HeartPulse className="w-3.5 h-3.5" />
+            Ver Salud Financiera Completa →
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+          {/* Nivel A: Resultado Operativo */}
+          <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase text-slate-400">Nivel A • Operativo</span>
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-400 font-extrabold px-2 py-0.5 rounded-full">
+                  Margen {threeTierFinancials.margenOperativoPct}%
+                </span>
+              </div>
+              <h4 className="text-xs font-extrabold text-slate-200 mt-1">¿Repartir es rentable?</h4>
+              <p className="text-2xl font-black text-emerald-400 mt-2">
+                {formatCurrency(threeTierFinancials.resultadoOperativo)}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Ingresos operativos ({formatCurrency(threeTierFinancials.ingresosOperativos)}) menos costos de ruta ({formatCurrency(threeTierFinancials.gastosOperativos)}).
+              </p>
+            </div>
+            <div className="mt-3 pt-2 border-t border-white/5 text-[10px] text-slate-400 flex justify-between">
+              <span>Combustible + Jhony:</span>
+              <b className="text-slate-300">{formatCurrency(threeTierFinancials.gastosOperativos)}</b>
+            </div>
+          </div>
+
+          {/* Nivel B: Después de Obligaciones */}
+          <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase text-slate-400">Nivel B • Obligaciones</span>
+                <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                  threeTierFinancials.resultadoDespuesObligaciones >= 0 ? 'bg-cyan-500/20 text-cyan-400' : 'bg-rose-500/20 text-rose-400'
+                }`}>
+                  {threeTierFinancials.resultadoDespuesObligaciones >= 0 ? 'Superávit' : 'Déficit'}
+                </span>
+              </div>
+              <h4 className="text-xs font-extrabold text-slate-200 mt-1">Tras pagar cuotas y tarjetas</h4>
+              <p className={`text-2xl font-black mt-2 ${
+                threeTierFinancials.resultadoDespuesObligaciones >= 0 ? 'text-white' : 'text-rose-400'
+              }`}>
+                {formatCurrency(threeTierFinancials.resultadoDespuesObligaciones)}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {threeTierFinancials.totalObligacionesDeuda > 0
+                  ? `Se descuentan ${formatCurrency(threeTierFinancials.totalObligacionesDeuda)} en compromisos pactados del mes.`
+                  : 'Sin deudas o cuotas pactadas pendientes para este período.'}
+              </p>
+            </div>
+            <div className="mt-3 pt-2 border-t border-white/5 text-[10px] text-slate-400 flex justify-between">
+              <span>Cuotas + Tarjetas:</span>
+              <b className="text-slate-300">{formatCurrency(threeTierFinancials.totalObligacionesDeuda)}</b>
+            </div>
+          </div>
+
+          {/* Nivel C: Flujo de Caja Disponible */}
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-cyan-950/40 to-slate-900 border border-cyan-500/30 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase text-cyan-400">Nivel C • Flujo Disponible</span>
+                <span className="text-[10px] bg-cyan-500/20 text-cyan-300 font-extrabold px-2 py-0.5 rounded-full">
+                  Libre
+                </span>
+              </div>
+              <h4 className="text-xs font-extrabold text-slate-200 mt-1">Para ahorro o imprevistos</h4>
+              <p className="text-2xl font-black text-cyan-400 mt-2">
+                {formatCurrency(threeTierFinancials.flujoDisponible)}
+              </p>
+              <p className="text-[11px] text-slate-300 mt-1">
+                Dinero efectivamente libre para alimentar tu fondo de emergencia, realizar abonos o compras familiares.
+              </p>
+            </div>
+            <div className="mt-3 pt-2 border-t border-cyan-500/20 text-[10px] text-cyan-200 flex justify-between">
+              <span>Efectivo en mano:</span>
+              <b className="text-white">{formatCurrency(summary.efectivoEnMano)}</b>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. FILA 1: HERO METRICS (4 Tarjetas Principales) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {/* HERO 1: Ganancia Neta Real (Superávit / Déficit) */}
-        <div className="app-card rounded-2xl p-5 border-l-4 border-l-cyan-500 shadow-md flex flex-col justify-between relative overflow-hidden">
+        {/* HERO 1: Ganancia Limpia */}
+        <div className="app-card rounded-2xl p-5 border-l-4 border-l-cyan-500 shadow-md flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div>
               <span className="text-[10px] font-black uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
@@ -169,7 +297,7 @@ export const ExecutiveDashboard: React.FC = () => {
               {formatCurrency(summary.superavitNeto)}
             </p>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-              Dinero disponible tras restar gasolina y gastos
+              Dinero disponible tras restar combustible, acompañante y ruta
             </p>
           </div>
 
@@ -200,17 +328,17 @@ export const ExecutiveDashboard: React.FC = () => {
               +{formatCurrency(summary.ingresosTotales)}
             </p>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-              {prodMetrics.totalServicios} servicios registrados en este rango
+              {prodMetrics.totalServicios} entregas / servicios registrados
             </p>
           </div>
 
           <div className="pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between text-xs text-slate-500">
             <span>Ticket Promedio:</span>
-            <b className="text-slate-900 dark:text-white">{formatCurrency(prodMetrics.ingresoPorServicio)} / servicio</b>
+            <b className="text-slate-900 dark:text-white">{formatCurrency(prodMetrics.ingresoPorServicio)} / serv</b>
           </div>
         </div>
 
-        {/* HERO 3: Gastos Operativos */}
+        {/* HERO 3: Gastos Operativos (Con Jhony) */}
         <div className="app-card rounded-2xl p-5 shadow-md flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div>
@@ -231,7 +359,7 @@ export const ExecutiveDashboard: React.FC = () => {
               -{formatCurrency(summary.gastosTotales)}
             </p>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-              Combustible, Jhony (acompañante), alimentos y mantenimiento
+              Gasolina, Jhony (acompañante), mantenimiento y comidas
             </p>
           </div>
 
@@ -241,7 +369,7 @@ export const ExecutiveDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* HERO 4: Rendimiento Horario ($/h) y Productividad */}
+        {/* HERO 4: Rendimiento Horario vs Benchmark */}
         <div className="app-card rounded-2xl p-5 shadow-md flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div>
@@ -260,312 +388,204 @@ export const ExecutiveDashboard: React.FC = () => {
           <div className="my-3">
             <p className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
               {formatCurrency(prodMetrics.ingresoPorHora)}
-              <span className="text-xs font-bold text-slate-400 font-normal"> / hora</span>
+              <span className="text-xs font-normal text-slate-400"> / hora</span>
             </p>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-              Margen neto real: <b className="text-cyan-600 dark:text-cyan-400">{formatCurrency(prodMetrics.margenPorHora)}/h</b>
+              Referencia ordinaria: <b className="text-purple-600 dark:text-purple-400">${formatCurrency(laborBenchmark.referenciaHora)}/h</b>
             </p>
           </div>
 
           <div className="pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between text-xs text-slate-500">
-            <span>Eficiencia en Ruta:</span>
-            <span className="px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 font-black text-[11px]">
-              {prodMetrics.ratioProductividad}% activo
+            <span>Jornada acumulada:</span>
+            <b className="text-slate-900 dark:text-white">{laborBenchmark.horasTotalesTrabajadas}h ({laborBenchmark.porcentajeReferenciaMensual}%)</b>
+          </div>
+        </div>
+      </div>
+
+      {/* 5. DIAGNÓSTICO INTELIGENTE Y RECOMENDACIONES (Smart Insights 🟢 🟡 🔴 💡) */}
+      <div className="app-card rounded-3xl p-5 shadow-md border border-slate-200 dark:border-white/5 space-y-3">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/5">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white">
+              Tu Situación Este Período • Copiloto RiderLedger
+            </h3>
+          </div>
+          <span className="text-[10px] text-slate-400 font-bold">
+            {smartInsights.length} diagnósticos clave
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {smartInsights.map((insight) => (
+            <div
+              key={insight.id}
+              className={`p-3.5 rounded-2xl border text-xs space-y-1.5 transition-all ${
+                insight.tipo === 'positivo'
+                  ? 'bg-emerald-500/5 border-emerald-500/20 text-slate-800 dark:text-slate-200'
+                  : insight.tipo === 'peligro'
+                  ? 'bg-rose-500/5 border-rose-500/20 text-slate-800 dark:text-slate-200'
+                  : insight.tipo === 'alerta'
+                  ? 'bg-amber-500/5 border-amber-500/20 text-slate-800 dark:text-slate-200'
+                  : 'bg-cyan-500/5 border-cyan-500/20 text-slate-800 dark:text-slate-200'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold flex items-center gap-1.5 text-slate-900 dark:text-white">
+                  <span>{insight.badge}</span>
+                  {insight.titulo}
+                </span>
+              </div>
+              <p className="text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">
+                {insight.descripcion}
+              </p>
+              {insight.accionSugerida && (
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium italic pt-1 border-t border-slate-200/40 dark:border-white/5">
+                  💡 {insight.accionSugerida}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 6. COMPARACIÓN CON EL PERÍODO ANTERIOR Y NARRATIVA HUMANA */}
+      {periodComparison && (
+        <div className="app-card rounded-3xl p-5 shadow-md border border-slate-200 dark:border-white/5 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-white/5">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Evolución Temporal
+              </span>
+              <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                {periodComparison.periodoActualNombre}
+              </h3>
+            </div>
+            <div className="flex items-center gap-3 text-xs font-bold">
+              <span className={periodComparison.variacionIngresosPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}>
+                Ingresos: {periodComparison.variacionIngresosPct >= 0 ? '+' : ''}{periodComparison.variacionIngresosPct}%
+              </span>
+              <span className={periodComparison.variacionSuperavitPct >= 0 ? 'text-cyan-500' : 'text-rose-500'}>
+                Superávit: {periodComparison.variacionSuperavitPct >= 0 ? '+' : ''}{periodComparison.variacionSuperavitPct}%
+              </span>
+            </div>
+          </div>
+
+          {/* Narrativa Humana */}
+          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-white/5 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+            <p>🗣️ {periodComparison.explicacionNarrativa}</p>
+          </div>
+        </div>
+      )}
+
+      {/* 7. SECCIÓN DE GRÁFICAS VISUALES (Strict Calendar Week / Month sin slice) */}
+      <ChartsSection />
+
+      {/* 8. DOBLE REALIDAD DE LIQUIDEZ Y CONTROL DE TARJETAS */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Doble Realidad de Liquidez (6 cols) */}
+        <div className="lg:col-span-6 app-card rounded-2xl p-5 shadow-md space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/5">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <Wallet className="w-4 h-4 text-cyan-500" />
+              Doble Realidad de Liquidez
+            </h3>
+            <span className="text-[10px] text-slate-400 font-semibold">Corte al instante</span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 flex-shrink-0">
+                <Smartphone className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">Saldo en Plataformas</span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">
+                  {isAppPositive ? 'Dinero a favor por dispersar' : 'Deuda acumulada por cobros en mano'}
+                </span>
+              </div>
+            </div>
+            <span className={`text-base font-black ${isAppPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+              {formatCurrency(summary.saldoApp)}
+            </span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex-shrink-0">
+                <Wallet className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">Efectivo en Mano</span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">Dinero físico disponible en calle</span>
+              </div>
+            </div>
+            <span className="text-base font-black text-slate-900 dark:text-white">
+              {formatCurrency(summary.efectivoEnMano)}
             </span>
           </div>
         </div>
-      </div>
 
-      {/* 4. FILA 2: GRÁFICA PRINCIPAL PANORÁMICA + DOBLE REALIDAD / CRÉDITOS */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Columna Izquierda (8 cols): Gráfica Principal Interactiva (Barras Apiladas / Tendencia) */}
-        <div className="lg:col-span-7 xl:col-span-8 app-card rounded-2xl p-5 shadow-md flex flex-col justify-between min-h-[380px]">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-white/5">
-            <div>
-              <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-                <Layers className="w-4 h-4 text-cyan-500" />
-                Flujo Financiero Desglosado
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {filter.range === 'hoy'
-                  ? 'Evolución de las jornadas recientes (con corte al día de hoy)'
-                  : filter.range === 'semana'
-                  ? 'Evolución día a día de esta semana'
-                  : filter.range === 'mes'
-                  ? 'Evolución día a día de este mes'
-                  : 'Histórico completo de jornadas registradas'}
-              </p>
-            </div>
-
-            {/* Selector de Modo de Gráfica */}
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-white/5 self-start sm:self-auto">
-              <button
-                type="button"
-                onClick={() => setChartMode('stacked')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  chartMode === 'stacked'
-                    ? 'bg-cyan-500 text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Barras Apiladas</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setChartMode('trend')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  chartMode === 'trend'
-                    ? 'bg-cyan-500 text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <LineChartIcon className="w-3.5 h-3.5" />
-                <span>Tendencia</span>
-              </button>
-            </div>
+        {/* Control de Tarjetas y Cuentas Revolventes (6 cols) */}
+        <div className="lg:col-span-6 app-card rounded-2xl p-5 shadow-md space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/5">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-purple-500" />
+              Tarjetas de Crédito y Cuentas
+            </h3>
+            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md ${
+              creditCardAnalysis.semaforoUtilizacion === 'VERDE'
+                ? 'bg-emerald-500/15 text-emerald-500'
+                : creditCardAnalysis.semaforoUtilizacion === 'AMARILLO'
+                ? 'bg-amber-500/15 text-amber-500'
+                : 'bg-rose-500/15 text-rose-500'
+            }`}>
+              {creditCardAnalysis.utilizacionGlobalPct}% Utilización
+            </span>
           </div>
 
-          {/* Contenedor del Gráfico */}
-          <div className="w-full h-72 sm:h-80 my-3">
-            {stackedData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                {chartMode === 'stacked' ? (
-                  <BarChart data={stackedData} barGap={4} margin={{ top: 15, right: 10, left: -20, bottom: 0 }}>
-                    <XAxis dataKey="periodo" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                    <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} tickFormatter={v => `$${Math.round(v/1000)}k`} />
-                    <Tooltip
-                      content={({ active, payload, label }) => {
-                        if (active && payload && payload.length) {
-                          const item = payload[0]?.payload;
-                          return (
-                            <div className="app-card bg-slate-950/95 text-white text-xs p-3 rounded-xl shadow-xl border border-white/10 space-y-1.5 min-w-[200px]">
-                              <p className="font-bold border-b border-white/10 pb-1 text-cyan-400">{label}</p>
-                              <div className="space-y-1">
-                                <p className="font-semibold text-emerald-400 text-[11px] uppercase tracking-wider">Ingresos (+{formatCurrency(item.TotalIngresos)})</p>
-                                {item.Domicilios > 0 && <p className="text-slate-300 text-[11px] flex justify-between"><span>• Domicilios:</span> <b>{formatCurrency(item.Domicilios)}</b></p>}
-                                {item.Pasajeros > 0 && <p className="text-slate-300 text-[11px] flex justify-between"><span>• Pasajeros:</span> <b>{formatCurrency(item.Pasajeros)}</b></p>}
-                                {item.OtrosIngresos > 0 && <p className="text-slate-300 text-[11px] flex justify-between"><span>• Otros:</span> <b>{formatCurrency(item.OtrosIngresos)}</b></p>}
-                              </div>
-                              <div className="space-y-1 pt-1 border-t border-white/10">
-                                <p className="font-semibold text-rose-400 text-[11px] uppercase tracking-wider">Gastos (-{formatCurrency(item.TotalGastos)})</p>
-                                {item.Combustible > 0 && <p className="text-slate-300 text-[11px] flex justify-between"><span>• Gasolina:</span> <b>{formatCurrency(item.Combustible)}</b></p>}
-                                {item.Acompanante > 0 && <p className="text-slate-300 text-[11px] flex justify-between"><span>• Jhony (Acompañante):</span> <b>{formatCurrency(item.Acompanante)}</b></p>}
-                                {item.Alimentacion > 0 && <p className="text-slate-300 text-[11px] flex justify-between"><span>• Alimentos:</span> <b>{formatCurrency(item.Alimentacion)}</b></p>}
-                                {item.Mantenimiento > 0 && <p className="text-slate-300 text-[11px] flex justify-between"><span>• Mantenimiento:</span> <b>{formatCurrency(item.Mantenimiento)}</b></p>}
-                                {item.OtrosGastos > 0 && <p className="text-slate-300 text-[11px] flex justify-between"><span>• Otros:</span> <b>{formatCurrency(item.OtrosGastos)}</b></p>}
-                              </div>
-                              <div className="pt-1 border-t border-white/10 flex justify-between font-bold text-xs">
-                                <span>Margen Neto:</span>
-                                <span className={item.Neto >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{formatCurrency(item.Neto)}</span>
-                              </div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                    <Bar dataKey="Domicilios" stackId="ingresos" fill="#0284c7" name="Domicilios" radius={[0, 0, 0, 0]} maxBarSize={32} />
-                    <Bar dataKey="Pasajeros" stackId="ingresos" fill="#8b5cf6" name="Pasajeros" radius={[0, 0, 0, 0]} maxBarSize={32} />
-                    <Bar dataKey="OtrosIngresos" stackId="ingresos" fill="#10b981" name="Otros Ingresos" radius={[4, 4, 0, 0]} maxBarSize={32} />
-                    <Bar dataKey="Combustible" stackId="gastos" fill="#f59e0b" name="Gasolina" radius={[0, 0, 0, 0]} maxBarSize={32} />
-                    <Bar dataKey="Acompanante" stackId="gastos" fill="#6366f1" name="Jhony (Acompañante)" radius={[0, 0, 0, 0]} maxBarSize={32} />
-                    <Bar dataKey="Alimentacion" stackId="gastos" fill="#ec4899" name="Alimentación" radius={[0, 0, 0, 0]} maxBarSize={32} />
-                    <Bar dataKey="Mantenimiento" stackId="gastos" fill="#ef4444" name="Mantenimiento" radius={[0, 0, 0, 0]} maxBarSize={32} />
-                    <Bar dataKey="OtrosGastos" stackId="gastos" fill="#64748b" name="Otros Gastos" radius={[4, 4, 0, 0]} maxBarSize={32} />
-                  </BarChart>
-                ) : (
-                  <AreaChart data={stackedData} margin={{ top: 15, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="ingresosGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#0284c7" stopOpacity={0.4}/>
-                        <stop offset="95%" stopColor="#0284c7" stopOpacity={0}/>
-                      </linearGradient>
-                      <linearGradient id="gastosGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4}/>
-                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="periodo" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                    <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} tickFormatter={v => `$${Math.round(v/1000)}k`} />
-                    <Tooltip
-                      content={({ active, payload, label }) => {
-                        if (active && payload && payload.length) {
-                          const inc = Number(payload[0]?.value) || 0;
-                          const exp = Number(payload[1]?.value) || 0;
-                          const net = inc - exp;
-                          return (
-                            <div className="app-card bg-slate-950/95 text-white text-xs p-3 rounded-xl shadow-xl border border-white/10 space-y-1 min-w-[180px]">
-                              <p className="font-bold text-cyan-400 border-b border-white/10 pb-1">{label}</p>
-                              <p className="text-emerald-400 flex justify-between"><span>Ingresos:</span> <b>{formatCurrency(inc)}</b></p>
-                              <p className="text-rose-400 flex justify-between"><span>Gastos:</span> <b>{formatCurrency(exp)}</b></p>
-                              <p className={`pt-1 border-t border-white/10 flex justify-between font-bold ${net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                <span>Margen Neto:</span> <b>{formatCurrency(net)}</b>
-                              </p>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                    <Area
-                      type="monotone"
-                      dataKey="TotalIngresos"
-                      stroke="#0284c7"
-                      strokeWidth={2.5}
-                      fillOpacity={1}
-                      fill="url(#ingresosGrad)"
-                      name="Ingresos Totales"
-                      dot={{ r: 4, fill: '#0284c7', stroke: '#ffffff', strokeWidth: 1.5 }}
-                      activeDot={{ r: 6 }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="TotalGastos"
-                      stroke="#ef4444"
-                      strokeWidth={2.5}
-                      fillOpacity={1}
-                      fill="url(#gastosGrad)"
-                      name="Gastos Totales"
-                      dot={{ r: 4, fill: '#ef4444', stroke: '#ffffff', strokeWidth: 1.5 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </AreaChart>
-                )}
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400 text-xs">
-                <p className="font-bold text-slate-600 dark:text-slate-300">No hay movimientos registrados en este rango temporal</p>
-                <p className="text-[11px] text-slate-400 mt-1">Registra turnos o pedidos de app para visualizar la comparativa</p>
-                <button
-                  onClick={() => openDrawer('app_income')}
-                  className="mt-3 px-3 py-1.5 rounded-xl bg-cyan-500 text-white font-bold text-xs shadow-xs"
-                >
-                  + Registrar Pedido
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Columna Derecha (4 cols): Doble Realidad de Liquidez & Control de Créditos */}
-        <div className="lg:col-span-5 xl:col-span-4 space-y-4">
-          {/* Card Doble Realidad de Liquidez */}
-          <div className="app-card rounded-2xl p-5 shadow-md space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/5">
-              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <Wallet className="w-4 h-4 text-cyan-500" />
-                Doble Realidad de Liquidez
-              </h3>
-              <span className="text-[10px] text-slate-400 font-semibold">Corte al día</span>
-            </div>
-
-            {/* Saldo en Plataformas */}
-            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 flex-shrink-0">
-                  <Smartphone className="w-5 h-5" />
-                </div>
-                <div>
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">Saldo en Plataformas</span>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">
-                    {isAppPositive ? 'Dinero a favor por dispersar' : 'Deuda acumulada por cobros en mano'}
-                  </span>
-                </div>
-              </div>
-              <span className={`text-base font-black ${isAppPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                {formatCurrency(summary.saldoApp)}
-              </span>
-            </div>
-
-            {/* Efectivo Físico en Mano */}
-            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex-shrink-0">
-                  <Wallet className="w-5 h-5" />
-                </div>
-                <div>
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">Efectivo en Mano</span>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">Dinero físico disponible en calle</span>
-                </div>
-              </div>
-              <span className="text-base font-black text-slate-900 dark:text-white">
-                {formatCurrency(summary.efectivoEnMano)}
-              </span>
-            </div>
-          </div>
-
-          {/* Card Control de Cuotas del 10 y 30 */}
-          <div className="app-card rounded-2xl p-5 shadow-md space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/5">
-              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <CalendarClock className="w-4 h-4 text-cyan-500" />
-                Cuotas (Días 10 y 30)
-              </h3>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-600 dark:text-cyan-400">
-                Próximo Día {creditAnalysis.proximoDiaPago}
-              </span>
-            </div>
-
+          {creditCards.length > 0 ? (
             <div className="space-y-2">
               <div className="flex justify-between text-xs">
-                <span className="text-slate-500">Pendiente por pagar:</span>
-                <b className="text-slate-900 dark:text-white">{formatCurrency(creditAnalysis.totalCuotasPendientes)}</b>
+                <span className="text-slate-400">Saldo utilizado total:</span>
+                <b className="text-rose-500">{formatCurrency(creditCardAnalysis.deudaTotalTarjetas)}</b>
               </div>
-
-              {/* Barra de Cobertura */}
-              <div className="space-y-1">
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-slate-400">Cobertura con ganancias:</span>
-                  <b className={creditAnalysis.estaCubierto ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>
-                    {creditAnalysis.porcentajeCobertura}%
-                  </b>
-                </div>
-                <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    style={{ width: `${Math.min(100, creditAnalysis.porcentajeCobertura)}%` }}
-                    className={`h-full ${creditAnalysis.estaCubierto ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                  />
-                </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-400">Cupo total disponible:</span>
+                <b className="text-emerald-500">{formatCurrency(creditCardAnalysis.cupoDisponibleTotal)}</b>
               </div>
-
-              {/* Veredicto */}
-              <div className={`p-2.5 rounded-xl text-xs font-semibold ${
-                creditAnalysis.estaCubierto
-                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                  : 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
-              }`}>
-                {creditAnalysis.estaCubierto ? (
-                  <span>✅ ¡Cubierto! Te sobran {formatCurrency(creditAnalysis.diferencia)} de ganancia.</span>
-                ) : (
-                  <span>⚠️ Faltan {formatCurrency(Math.abs(creditAnalysis.diferencia))} para la cuota.</span>
-                )}
+              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-white/5 text-[11px] text-slate-400">
+                ⚠️ {creditCardAnalysis.advertenciaPagoMinimo}
               </div>
             </div>
-
-            <div className="pt-2 border-t border-slate-100 dark:border-white/5 flex justify-between items-center text-xs">
-              <span className="text-slate-400 text-[11px]">Vence en {creditAnalysis.diasRestantes} días</span>
-              <Link to="/creditos" className="text-cyan-600 dark:text-cyan-400 font-bold hover:underline text-[11px] flex items-center gap-1">
-                Administrar cuotas <ArrowRight className="w-3 h-3" />
+          ) : (
+            <div className="py-4 text-center text-xs text-slate-500">
+              No tienes tarjetas registradas.{' '}
+              <Link to="/creditos" className="text-cyan-500 font-bold hover:underline">
+                Añadir tarjeta →
               </Link>
             </div>
+          )}
+
+          <div className="pt-2 border-t border-slate-100 dark:border-white/5 flex justify-between items-center text-xs">
+            <span className="text-slate-400 text-[11px]">{creditCards.length} cuentas registradas</span>
+            <Link to="/creditos" className="text-cyan-600 dark:text-cyan-400 font-bold hover:underline text-[11px] flex items-center gap-1">
+              Ver créditos y tarjetas <ArrowRight className="w-3 h-3" />
+            </Link>
           </div>
         </div>
       </div>
 
-      {/* 5. FILA 3: DISTRIBUCIONES ANALÍTICAS Y RENDIMIENTO EN RUTA (3 Columnas) */}
+      {/* 9. DISTRIBUCIÓN DE INGRESOS, GASTOS Y PRODUCTIVIDAD */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {/* TARJETA 1: ¿De dónde vino mi dinero? (Distribución de Ingresos por Plataforma) */}
+        {/* Distribución de Ingresos */}
         <div className="app-card rounded-2xl p-5 shadow-md flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/5">
               <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 <PieChartIcon className="w-4 h-4 text-cyan-500" />
-                ¿De dónde vino el dinero?
+                Ingresos por Plataforma
               </h3>
-              <span className="text-[10px] text-slate-400 font-semibold">Por Plataforma</span>
             </div>
 
             <div className="h-44 w-full my-2 flex items-center justify-center">
@@ -576,8 +596,8 @@ export const ExecutiveDashboard: React.FC = () => {
                       data={incomeDistribution}
                       cx="50%"
                       cy="50%"
-                      innerRadius={50}
-                      outerRadius={72}
+                      innerRadius={48}
+                      outerRadius={68}
                       paddingAngle={3}
                       dataKey="value"
                     >
@@ -596,7 +616,6 @@ export const ExecutiveDashboard: React.FC = () => {
               )}
             </div>
 
-            {/* Leyenda de Plataformas */}
             <div className="space-y-1.5 pt-1 max-h-36 overflow-y-auto pr-1">
               {incomeDistribution.map(item => (
                 <div key={item.name} className="flex items-center justify-between text-xs">
@@ -614,15 +633,14 @@ export const ExecutiveDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* TARJETA 2: ¿En qué se fue el dinero? (Distribución de Gastos por Rubro) */}
+        {/* Distribución de Gastos */}
         <div className="app-card rounded-2xl p-5 shadow-md flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/5">
               <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 <PieChartIcon className="w-4 h-4 text-rose-500" />
-                ¿En qué gasté?
+                Gastos por Rubro
               </h3>
-              <span className="text-[10px] text-slate-400 font-semibold">Por Rubro</span>
             </div>
 
             <div className="h-44 w-full my-2 flex items-center justify-center">
@@ -633,8 +651,8 @@ export const ExecutiveDashboard: React.FC = () => {
                       data={expenseDistribution}
                       cx="50%"
                       cy="50%"
-                      innerRadius={50}
-                      outerRadius={72}
+                      innerRadius={48}
+                      outerRadius={68}
                       paddingAngle={3}
                       dataKey="value"
                     >
@@ -653,7 +671,6 @@ export const ExecutiveDashboard: React.FC = () => {
               )}
             </div>
 
-            {/* Leyenda de Gastos */}
             <div className="space-y-1.5 pt-1 max-h-36 overflow-y-auto pr-1">
               {expenseDistribution.map(item => (
                 <div key={item.name} className="flex items-center justify-between text-xs">
@@ -671,7 +688,7 @@ export const ExecutiveDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* TARJETA 3: Rendimiento y Productividad en Ruta */}
+        {/* Productividad y Tiempos de Reparto */}
         <div className="app-card rounded-2xl p-5 shadow-md flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/5">
@@ -684,7 +701,6 @@ export const ExecutiveDashboard: React.FC = () => {
               </span>
             </div>
 
-            {/* Comparativa Tiempos: Reparto vs Espera */}
             <div className="my-3 space-y-2">
               <div className="flex justify-between text-xs">
                 <span className="text-slate-500">Tiempo de Reparto:</span>
@@ -706,16 +722,12 @@ export const ExecutiveDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Grid de Métricas Operativas */}
             <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-white/5">
               <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/5">
                 <span className="text-[10px] text-slate-400 block font-semibold">Total Servicios</span>
                 <b className="text-sm text-slate-900 dark:text-white block mt-0.5">
                   {prodMetrics.totalServicios} entregas
                 </b>
-                <span className="text-[10px] text-cyan-600 dark:text-cyan-400 font-semibold">
-                  {prodMetrics.serviciosPorHora} serv/h
-                </span>
               </div>
 
               <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/5">
@@ -723,9 +735,6 @@ export const ExecutiveDashboard: React.FC = () => {
                 <b className="text-sm text-slate-900 dark:text-white block mt-0.5">
                   {prodMetrics.kilometrosTotales.toFixed(0)} km
                 </b>
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                  {formatCurrency(prodMetrics.rendimientoKm)} / km
-                </span>
               </div>
             </div>
           </div>

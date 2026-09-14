@@ -10,7 +10,8 @@ import {
   Plus,
   Zap,
   Users,
-  UserCheck
+  UserCheck,
+  HeartPulse
 } from 'lucide-react';
 import { useAppData } from '../../context/AppDataContext';
 import { formatCurrency } from '../../lib/calculations';
@@ -21,8 +22,9 @@ export const Sidebar: React.FC = () => {
 
   const navItems = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/salud-financiera', label: 'Salud Financiera', icon: HeartPulse, badge: 'Copiloto' },
     { to: '/reportes', label: 'Reportes & Gráficas', icon: BarChart2 },
-    { to: '/creditos', label: 'Créditos (10 y 30)', icon: CalendarClock, badge: creditAnalysis.alertaVencimientoCercano ? 'Alerta' : undefined },
+    { to: '/creditos', label: 'Créditos y Tarjetas', icon: CalendarClock, badge: creditAnalysis.alertaVencimientoCercano ? 'Alerta' : undefined },
     { to: '/turnos', label: 'Turnos y Horas', icon: Bike },
     { to: '/movimientos', label: 'Movimientos', icon: ReceiptText },
     { to: '/ajustes', label: 'Configuración', icon: Settings },

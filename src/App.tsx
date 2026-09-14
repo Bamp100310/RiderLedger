@@ -11,6 +11,7 @@ import { CreditsView } from './components/credits/CreditsView';
 import { ShiftsHistoryView } from './components/shifts/ShiftsHistoryView';
 import { TransactionsLedger } from './components/transactions/TransactionsLedger';
 import { SettingsView } from './components/settings/SettingsView';
+import { FinancialHealthView } from './components/financialHealth/FinancialHealthView';
 import { X } from 'lucide-react';
 
 const AppLayout: React.FC = () => {
@@ -55,6 +56,7 @@ const AppLayout: React.FC = () => {
         <main className="flex-1 p-3 sm:p-5 lg:p-6 pb-24 lg:pb-8 overflow-y-auto">
           <Routes>
             <Route path="/" element={<ExecutiveDashboard />} />
+            <Route path="/salud-financiera" element={<FinancialHealthView />} />
             <Route path="/reportes" element={<ReportsView />} />
             <Route path="/creditos" element={<CreditsView />} />
             <Route path="/turnos" element={<ShiftsHistoryView />} />

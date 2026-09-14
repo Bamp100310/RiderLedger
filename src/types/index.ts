@@ -120,3 +120,197 @@ export interface SyncQueueItem {
 }
 
 export type ThemeMode = 'dark' | 'light';
+
+// ==============================================================================
+// TIPOS PARA COPILOTO FINANCIERO Y PRODUCTIVIDAD (RIDERLEDGER 3.0)
+// ==============================================================================
+
+export interface CreditCardAccount {
+  id: string;
+  userId?: string;
+  nombre: string; // ej: "Bancolombia Mastercard", "Nu"
+  cupoTotal: number;
+  saldoUtilizado: number;
+  fechaCorte: number; // día del mes (1..31)
+  fechaPago: number; // día del mes (1..31)
+  pagoMinimo: number;
+  pagoTotalEsperado?: number;
+  tasaInteresEA?: number; // Tasa Efectiva Anual en % (opcional, ej: 25.4)
+  cuotaMes?: number;
+  bancoEntidad?: string;
+  ultimosDigitos?: string;
+  notas?: string;
+  estado?: 'AL_DIA' | 'EN_ALERTA' | 'SOBREGIRO';
+}
+
+export interface CreditCardAnalysis {
+  tarjetas: CreditCardAccount[];
+  deudaTotalTarjetas: number;
+  cupoTotalTarjetas: number;
+  cupoDisponibleTotal: number;
+  utilizacionGlobalPct: number;
+  semaforoUtilizacion: 'VERDE' | 'AMARILLO' | 'ROJO';
+  pagoMinimoTotal: number;
+  pagoCompletoTotal: number;
+  advertenciaPagoMinimo: string;
+}
+
+export interface FinancialSettings {
+  // Salario mínimo de referencia Colombia 2026 (Decreto 1469/2025 - Decreto 159/2026)
+  metaIngresoMinimoMensual: number; // Default: 1750905
+  horasSemanalesReferencia: number; // Default: 42 (Ley 2101 de 2021)
+  horasMensualesReferencia: number; // Default: 182 (42 * 52 / 12)
+  metaIngresoHoraReferencia: number; // Default: 9620 (1750905 / 182)
+  metaAhorroMensual: number; // Default: 300000
+  metaFondoEmergenciaMeses: number; // Default: 3 (3 a 6 meses de gastos esenciales)
+  limiteUtilizacionCreditoPct: number; // Default: 30 (%)
+  porcentajeNecesidadesRef: number; // Default: 50 (%)
+  porcentajeDeseosRef: number; // Default: 30 (%)
+  porcentajeAhorroDeudaRef: number; // Default: 20 (%)
+  metaGastoCombustibleMaxPct: number; // Default: 25 (%)
+}
+
+export interface ThreeTierFinancials {
+  // Nivel A: Operativo (¿El trabajo de repartir es rentable?)
+  ingresosOperativos: number;
+  gastosOperativos: number;
+  resultadoOperativo: number;
+  margenOperativoPct: number;
+
+  // Nivel B: Después de obligaciones (¿Cuánto queda tras pagar deudas?)
+  cuotasCreditosMes: number;
+  pagosTarjetasMes: number;
+  totalObligacionesDeuda: number;
+  resultadoDespuesObligaciones: number;
+
+  // Nivel C: Flujo de caja disponible (Libre para ahorro, abonos o imprevistos)
+  flujoDisponible: number;
+  efectivoEnMano: number;
+  saldoApp: number;
+}
+
+export type LaborOverloadStatus = 'NORMAL' | 'ALTA' | 'MUY_ALTA' | 'CRITICA';
+
+export interface LaborHealthMetrics {
+  horasTotalesTrabajadas: number;
+  horasRepartoActivo: number;
+  horasEspera: number;
+  porcentajeReferenciaMensual: number;
+  horasAdicionalesSobreReferencia: number;
+  ingresoNetoEfectivoPorHora: number; // superávit operativo / horas totales
+  ingresoBrutoPorHora: number;
+  flujoDisponiblePorHora: number; // flujo disponible / horas totales
+  referenciaHora: number;
+  cumpleMetaHora: boolean;
+  cumpleMetaMensual: boolean;
+  ingresoMensualProyectado: number;
+  diferenciaMetaMensual: number;
+  porcentajeCumplimientoMetaMensual: number;
+  estadoCargaLaboral: LaborOverloadStatus;
+  rendimientoMarginalDecreciente: boolean; // detecta si horas suben pero $/h cae
+  explicacionLaboral: string;
+  recomendacionLaboral: string;
+}
+
+export interface PeriodComparisonResult {
+  periodoActualNombre: string;
+  periodoAnteriorNombre: string;
+  ingresosActual: number;
+  ingresosAnterior: number;
+  variacionIngresosPct: number;
+  gastosActual: number;
+  gastosAnterior: number;
+  variacionGastosPct: number;
+  superavitActual: number;
+  superavitAnterior: number;
+  variacionSuperavitPct: number;
+  horasActual: number;
+  horasAnterior: number;
+  variacionHorasPct: number;
+  ingresoHoraActual: number;
+  ingresoHoraAnterior: number;
+  variacionIngresoHoraPct: number;
+  explicacionNarrativa: string;
+}
+
+export type ExpenseCategoryClassification =
+  | 'PRODUCTIVO'
+  | 'NECESARIO'
+  | 'DISCRECIONAL'
+  | 'POTENCIALMENTE_PROBLEMATICO'
+  | 'FINANCIERO';
+
+export interface ExpenseItemAnalysis {
+  categoria: string;
+  monto: number;
+  porcentajeIngreso: number;
+  porcentajeSuperavit: number;
+  clasificacion: ExpenseCategoryClassification;
+  clasificacionLabel: string;
+  descripcion: string;
+}
+
+export interface ExpenseHealthAnalysis {
+  items: ExpenseItemAnalysis[];
+  totalGastos: number;
+  ratioGastoIngresoPct: number;
+  necesidadesTotal: number;
+  deseosTotal: number;
+  ahorroDeudaTotal: number;
+  porcentajeNecesidadesReal: number;
+  porcentajeDeseosReal: number;
+  porcentajeAhorroDeudaReal: number;
+  explicacion50_30_20: string;
+  alertaGastos: string | null;
+}
+
+export interface SavingsAndEmergencyHealth {
+  ahorroActualEstimado: number;
+  gastosEsencialesMes: number;
+  fondoEmergenciaMinimo: number; // 3 meses
+  fondoEmergenciaRecomendado: number; // 6 meses
+  porcentajeFondoCubierto: number;
+  mesesCoberturaActual: number;
+  metaAhorroMensual: number;
+  ahorroMesActual: number;
+  porcentajeMetaAhorroMes: number;
+  tiempoEstimadoMesesParaMeta: number;
+}
+
+export interface SaveVsPayRecommendation {
+  prioridadPrincipal: 'CREAR_FONDO_EMERGENCIA' | 'ABONAR_DEUDA_INTERES_ALTO' | 'RESERVA_OBLIGACIONES' | 'EQUILIBRIO_AHORRO_ABONO';
+  titulo: string;
+  explicacion: string;
+  montoRecomendadoAbono: number;
+  montoRecomendadoAhorro: number;
+  ahorroInteresEstimadoTexto?: string;
+  resilienciaTexto: string;
+}
+
+export interface DashboardInsight {
+  id: string;
+  tipo: 'positivo' | 'alerta' | 'peligro' | 'accion';
+  badge: '🟢' | '🟡' | '🔴' | '💡';
+  titulo: string;
+  descripcion: string;
+  accionSugerida?: string;
+}
+
+export interface CalendarPeriodBarItem {
+  key: string;
+  periodo: string; // ej: "Lun 07", "1", "Ene 2026"
+  fechaISO?: string;
+  Ingresos: number;
+  Gastos: number;
+  Superavit: number;
+  Domicilios: number;
+  Pasajeros: number;
+  OtrosIngresos: number;
+  Combustible: number;
+  Acompanante: number;
+  Alimentacion: number;
+  Mantenimiento: number;
+  OtrosGastos: number;
+  CuotaCredito: number;
+  sinActividad?: boolean;
+}

@@ -17,8 +17,11 @@ import {
   ExternalLink,
   Sparkles,
   Plus,
-  Power
+  Power,
+  Target,
+  Scale
 } from 'lucide-react';
+import { DEFAULT_FINANCIAL_SETTINGS, formatCurrency } from '../../lib/calculations';
 
 const SUPABASE_SQL_SCRIPT = `-- ==============================================================================
 -- RIDERLEDGER: ESQUEMA DE BASE DE DATOS SUPABASE (POSTGRESQL)
@@ -79,10 +82,22 @@ export const SettingsView: React.FC = () => {
     userApps,
     addUserApp,
     deleteUserApp,
-    toggleUserApp
+    toggleUserApp,
+    financialSettings,
+    updateFinancialSettings
   } = useAppData();
 
-  const [activeTab, setActiveTab] = useState<'apps' | 'familia' | 'supabase' | 'backup'>('apps');
+  const [activeTab, setActiveTab] = useState<'apps' | 'familia' | 'metas' | 'supabase' | 'backup'>('apps');
+
+  // Metas y Referencias Financieras
+  const [metaIngresoMinimo, setMetaIngresoMinimo] = useState(financialSettings.metaIngresoMinimoMensual);
+  const [horasSemanales, setHorasSemanales] = useState(financialSettings.horasSemanalesReferencia);
+  const [metaAhorro, setMetaAhorro] = useState(financialSettings.metaAhorroMensual);
+  const [limiteCredito, setLimiteCredito] = useState(financialSettings.limiteUtilizacionCreditoPct);
+  const [pctNecesidades, setPctNecesidades] = useState(financialSettings.porcentajeNecesidadesRef);
+  const [pctDeseos, setPctDeseos] = useState(financialSettings.porcentajeDeseosRef);
+  const [pctAhorroDeuda, setPctAhorroDeuda] = useState(financialSettings.porcentajeAhorroDeudaRef);
+  const [savedSettingsSuccess, setSavedSettingsSuccess] = useState(false);
 
   // Formulario nueva App
   const [newAppName, setNewAppName] = useState('');
@@ -104,6 +119,40 @@ export const SettingsView: React.FC = () => {
   }>({ status: 'idle' });
   const [copiedSql, setCopiedSql] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  const handleSaveFinancialSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    const horasMensuales = Math.round((horasSemanales * 52) / 12);
+    const metaHora = horasMensuales > 0 ? Math.round(metaIngresoMinimo / horasMensuales) : 0;
+    updateFinancialSettings({
+      metaIngresoMinimoMensual: metaIngresoMinimo,
+      horasSemanalesReferencia: horasSemanales,
+      horasMensualesReferencia: horasMensuales,
+      metaIngresoHoraReferencia: metaHora,
+      metaAhorroMensual: metaAhorro,
+      limiteUtilizacionCreditoPct: limiteCredito,
+      porcentajeNecesidadesRef: pctNecesidades,
+      porcentajeDeseosRef: pctDeseos,
+      porcentajeAhorroDeudaRef: pctAhorroDeuda
+    });
+    setSavedSettingsSuccess(true);
+    setTimeout(() => setSavedSettingsSuccess(false), 3000);
+  };
+
+  const handleResetFinancialSettings = () => {
+    if (confirm('¿Restablecer las referencias a los valores legales oficiales de Colombia 2026?')) {
+      updateFinancialSettings(DEFAULT_FINANCIAL_SETTINGS);
+      setMetaIngresoMinimo(DEFAULT_FINANCIAL_SETTINGS.metaIngresoMinimoMensual);
+      setHorasSemanales(DEFAULT_FINANCIAL_SETTINGS.horasSemanalesReferencia);
+      setMetaAhorro(DEFAULT_FINANCIAL_SETTINGS.metaAhorroMensual);
+      setLimiteCredito(DEFAULT_FINANCIAL_SETTINGS.limiteUtilizacionCreditoPct);
+      setPctNecesidades(DEFAULT_FINANCIAL_SETTINGS.porcentajeNecesidadesRef);
+      setPctDeseos(DEFAULT_FINANCIAL_SETTINGS.porcentajeDeseosRef);
+      setPctAhorroDeuda(DEFAULT_FINANCIAL_SETTINGS.porcentajeAhorroDeudaRef);
+      setSavedSettingsSuccess(true);
+      setTimeout(() => setSavedSettingsSuccess(false), 3000);
+    }
+  };
 
   const handleTestConnection = async () => {
     if (!url.trim() || !anonKey.trim()) {
@@ -191,6 +240,7 @@ export const SettingsView: React.FC = () => {
         {[
           { id: 'apps', label: '📱 Mis Aplicaciones', desc: 'Apps activas' },
           { id: 'familia', label: '👥 Cuentas Familiares', desc: 'Perfiles' },
+          { id: 'metas', label: '🎯 Metas y Referencias', desc: 'SMLMV y 42h' },
           { id: 'supabase', label: '☁️ Base de Datos', desc: 'Supabase' },
           { id: 'backup', label: '💾 Copia de Seguridad', desc: 'Respaldo' },
         ].map(tab => (
@@ -495,7 +545,179 @@ export const SettingsView: React.FC = () => {
       )}
 
       {/* ============================================================ */}
-      {/* 3. BASE DE DATOS SUPABASE */}
+      {/* 3. METAS Y REFERENCIAS FINANCIERAS (SMLMV Y 42H) */}
+      {/* ============================================================ */}
+      {activeTab === 'metas' && (
+        <div className="space-y-4">
+          <div className="app-card rounded-2xl p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 pb-3 border-b border-slate-100 dark:border-white/5">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Target className="w-4 h-4 text-cyan-500" />
+                  Metas y Referencias Financieras (Benchmarks)
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Configura tus referencias de comparación basadas en la ley colombiana o tus objetivos personales.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleResetFinancialSettings}
+                className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/10 text-xs font-bold transition-all self-start sm:self-auto"
+              >
+                Restablecer Valores Legales 2026
+              </button>
+            </div>
+
+            {savedSettingsSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2 font-bold animate-fade-in">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Configuración guardada exitosamente. Todas las métricas han sido actualizadas.</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveFinancialSettings} className="space-y-5 text-xs">
+              {/* Bloque 1: Salario Mínimo y Jornada */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/5 space-y-3">
+                <span className="font-extrabold text-slate-900 dark:text-white text-xs block">
+                  1. Salario Mínimo y Jornada Máxima Ordinaria (Colombia)
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                      Meta de Ingreso Mínimo Mensual ($ COP)
+                    </label>
+                    <input
+                      type="number"
+                      value={metaIngresoMinimo}
+                      onChange={e => setMetaIngresoMinimo(parseFloat(e.target.value) || 0)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold text-sm"
+                      required
+                    />
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      Ref. legal 2026: $1.750.905 COP (Decretos 1469/2025 y 159/2026)
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                      Jornada Semanal de Referencia (Horas)
+                    </label>
+                    <input
+                      type="number"
+                      value={horasSemanales}
+                      onChange={e => setHorasSemanales(parseFloat(e.target.value) || 0)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold text-sm"
+                      required
+                    />
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      Ref. legal 2026: 42 horas/semana (Ley 2101 de 2021)
+                    </span>
+                  </div>
+                </div>
+
+                {/* Cálculos Dinámicos Resultantes */}
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200 dark:border-white/5 text-[11px]">
+                  <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-700 dark:text-cyan-300">
+                    <span>Horas Mensuales Calculadas: </span>
+                    <b>{Math.round((horasSemanales * 52) / 12)} horas</b>
+                  </div>
+                  <div className="p-2 rounded-xl bg-purple-500/10 text-purple-700 dark:text-purple-300">
+                    <span>Valor Hora Calculada: </span>
+                    <b>${formatCurrency(horasSemanales > 0 ? Math.round(metaIngresoMinimo / ((horasSemanales * 52) / 12)) : 0)} / h</b>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bloque 2: Presupuesto y Tarjetas */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/5 space-y-3">
+                <span className="font-extrabold text-slate-900 dark:text-white text-xs block">
+                  2. Ahorro, Deuda y Tarjetas de Crédito
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                      Meta de Ahorro Mensual / Fondo ($ COP)
+                    </label>
+                    <input
+                      type="number"
+                      value={metaAhorro}
+                      onChange={e => setMetaAhorro(parseFloat(e.target.value) || 0)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold text-sm"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                      Límite Alerta de Uso de Tarjetas (%)
+                    </label>
+                    <input
+                      type="number"
+                      value={limiteCredito}
+                      onChange={e => setLimiteCredito(parseFloat(e.target.value) || 0)}
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 text-slate-900 dark:text-white font-bold text-sm"
+                      required
+                    />
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      Recomendado por asesores financieros: máximo 30%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Porcentajes 50/30/20 */}
+                <div className="pt-2 border-t border-slate-200 dark:border-white/5 space-y-2">
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
+                    Distribución Presupuestaria 50 / 30 / 20 (%)
+                  </span>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Necesidades:</span>
+                      <input
+                        type="number"
+                        value={pctNecesidades}
+                        onChange={e => setPctNecesidades(parseFloat(e.target.value) || 0)}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 rounded-xl px-2.5 py-1.5 text-center font-bold"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Deseos:</span>
+                      <input
+                        type="number"
+                        value={pctDeseos}
+                        onChange={e => setPctDeseos(parseFloat(e.target.value) || 0)}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 rounded-xl px-2.5 py-1.5 text-center font-bold"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">Ahorro / Deuda:</span>
+                      <input
+                        type="number"
+                        value={pctAhorroDeuda}
+                        onChange={e => setPctAhorroDeuda(parseFloat(e.target.value) || 0)}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 rounded-xl px-2.5 py-1.5 text-center font-bold"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-white font-bold text-xs shadow-md shadow-cyan-500/20 transition-all"
+                >
+                  Guardar Metas y Referencias
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* 4. BASE DE DATOS SUPABASE */}
       {/* ============================================================ */}
       {activeTab === 'supabase' && (
         <div className="space-y-4">
