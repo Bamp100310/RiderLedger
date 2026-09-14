@@ -92,7 +92,8 @@ export const ReportsView: React.FC = () => {
   }, [reports]);
 
   const totalHorasGen = (totals.minutosReparto + totals.minutosEspera) / 60;
-  const avgRendimientoHora = totalHorasGen > 0 ? totals.totalIngresos / totalHorasGen : 0;
+  const rendimientoOperativoHora = totalHorasGen > 0 ? (totals.totalIngresos - totals.totalGastos) / totalHorasGen : null;
+  const facturacionBrutaHora = totalHorasGen > 0 ? totals.totalIngresos / totalHorasGen : null;
 
   // Desglose de gastos por categorías reales para el gráfico de dona
   const expenseBreakdown = useMemo(() => {
@@ -292,10 +293,15 @@ export const ReportsView: React.FC = () => {
           </p>
         </div>
         <div className="app-card p-3.5 rounded-xl border-l-4 border-l-amber-500 col-span-2 sm:col-span-1">
-          <span className="text-[10px] uppercase font-bold text-slate-400">Promedio $/h</span>
-          <p className="text-base sm:text-lg font-black text-amber-600 dark:text-amber-400 mt-0.5">
-            {formatCurrency(avgRendimientoHora)}/h
+          <span className="text-[10px] uppercase font-bold text-slate-400">Rendimiento Operativo/h</span>
+          <p className="text-base sm:text-lg font-black text-slate-900 dark:text-white mt-0.5">
+            {rendimientoOperativoHora !== null ? `${formatCurrency(rendimientoOperativoHora)}/h` : 'No disponible'}
           </p>
+          {facturacionBrutaHora !== null && (
+            <span className="text-[10px] text-slate-400 block truncate">
+              Bruto: {formatCurrency(facturacionBrutaHora)}/h
+            </span>
+          )}
         </div>
       </div>
 
@@ -507,69 +513,74 @@ export const ReportsView: React.FC = () => {
                   <th className="py-3 px-3 text-right text-rose-600 dark:text-rose-400 font-extrabold">Total Gastos</th>
                   <th className="py-3 px-3 text-right font-black">Superávit</th>
                   <th className="py-3 px-3 text-center">Horas (Rep/Esp)</th>
-                  <th className="py-3 px-3 text-right">Km</th>
-                  <th className="py-3 px-3 text-right text-cyan-600 dark:text-cyan-400 font-bold">$/h</th>
+                  <th className="py-3 px-3 text-right">Km Recorridos</th>
+                  <th className="py-3 px-3 text-right text-cyan-600 dark:text-cyan-400 font-bold">Rendimiento/h</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                {reports.map((row, idx) => (
-                  <tr
-                    key={row.key}
-                    className={`hover:bg-slate-50 dark:hover:bg-white/5 transition-colors ${
-                      idx % 2 === 0 ? 'bg-transparent' : 'bg-slate-50/50 dark:bg-slate-900/30'
-                    }`}
-                  >
-                    <td className="py-3 px-3.5 font-bold text-slate-900 dark:text-white whitespace-nowrap sticky left-0 bg-white dark:bg-slate-900 z-10">
-                      {row.periodo}
-                    </td>
-                    <td className="py-3 px-3 text-right text-slate-700 dark:text-slate-300 font-medium">
-                      {formatCurrency(row.domicilios)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-slate-700 dark:text-slate-300 font-medium">
-                      {formatCurrency(row.pasajeros)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-slate-700 dark:text-slate-300 font-medium">
-                      {formatCurrency(row.otrosIngresos)}
-                    </td>
-                    <td className="py-3 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
-                      {formatCurrency(row.totalIngresos)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-slate-700 dark:text-slate-300 font-medium">
-                      {formatCurrency(row.gasolina)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-indigo-500 dark:text-indigo-400 font-bold">
-                      {formatCurrency(row.acompanante || 0)}
-                    </td>
-                    <td className="py-3 px-3 text-right text-slate-700 dark:text-slate-300 font-medium">
-                      {formatCurrency(row.otrosGastos)}
-                    </td>
-                    <td className="py-3 px-3 text-right font-bold text-rose-600 dark:text-rose-400">
-                      {formatCurrency(row.totalGastos)}
-                    </td>
-                    <td className="py-3 px-3 text-right font-black">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[11px] ${
-                          row.superavit >= 0
-                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-extrabold'
-                            : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 font-extrabold'
-                        }`}
-                      >
-                        {formatCurrency(row.superavit)}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-center whitespace-nowrap text-slate-600 dark:text-slate-300">
-                      <span className="text-cyan-600 dark:text-cyan-400 font-semibold">{formatMinutes(row.minutosReparto)}</span>
-                      <span className="text-slate-400 mx-1">/</span>
-                      <span className="text-slate-600 dark:text-slate-400 font-semibold">{formatMinutes(row.minutosEspera)}</span>
-                    </td>
-                    <td className="py-3 px-3 text-right text-slate-700 dark:text-slate-300 font-medium">
-                      {row.kilometros.toFixed(1)} km
-                    </td>
-                    <td className="py-3 px-3 text-right text-cyan-600 dark:text-cyan-400 font-bold whitespace-nowrap">
-                      {formatCurrency(row.rendimientoHora)}
-                    </td>
-                  </tr>
-                ))}
+                {reports.map((row, idx) => {
+                  const rowHours = (row.minutosReparto + row.minutosEspera) / 60;
+                  const rowYield = rowHours > 0 ? (row.totalIngresos - row.totalGastos) / rowHours : null;
+
+                  return (
+                    <tr
+                      key={row.key}
+                      className={`hover:bg-slate-50 dark:hover:bg-white/5 transition-colors ${
+                        idx % 2 === 0 ? 'bg-transparent' : 'bg-slate-50/50 dark:bg-slate-900/30'
+                      }`}
+                    >
+                      <td className="py-3 px-3.5 font-bold text-slate-900 dark:text-white whitespace-nowrap sticky left-0 bg-white dark:bg-slate-900 z-10">
+                        {row.periodo}
+                      </td>
+                      <td className="py-3 px-3 text-right text-slate-700 dark:text-slate-300 font-medium">
+                        {formatCurrency(row.domicilios)}
+                      </td>
+                      <td className="py-3 px-3 text-right text-slate-700 dark:text-slate-300 font-medium">
+                        {formatCurrency(row.pasajeros)}
+                      </td>
+                      <td className="py-3 px-3 text-right text-slate-700 dark:text-slate-300 font-medium">
+                        {formatCurrency(row.otrosIngresos)}
+                      </td>
+                      <td className="py-3 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                        {formatCurrency(row.totalIngresos)}
+                      </td>
+                      <td className="py-3 px-3 text-right text-slate-700 dark:text-slate-300 font-medium">
+                        {formatCurrency(row.gasolina)}
+                      </td>
+                      <td className="py-3 px-3 text-right text-indigo-500 dark:text-indigo-400 font-bold">
+                        {formatCurrency(row.acompanante || 0)}
+                      </td>
+                      <td className="py-3 px-3 text-right text-slate-700 dark:text-slate-300 font-medium">
+                        {formatCurrency(row.otrosGastos)}
+                      </td>
+                      <td className="py-3 px-3 text-right font-bold text-rose-600 dark:text-rose-400">
+                        {formatCurrency(row.totalGastos)}
+                      </td>
+                      <td className="py-3 px-3 text-right font-black">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[11px] ${
+                            row.superavit >= 0
+                              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-extrabold'
+                              : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 font-extrabold'
+                          }`}
+                        >
+                          {formatCurrency(row.superavit)}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-center whitespace-nowrap text-slate-600 dark:text-slate-300">
+                        <span className="text-cyan-600 dark:text-cyan-400 font-semibold">{formatMinutes(row.minutosReparto)}</span>
+                        <span className="text-slate-400 mx-1">/</span>
+                        <span className="text-slate-600 dark:text-slate-400 font-semibold">{formatMinutes(row.minutosEspera)}</span>
+                      </td>
+                      <td className="py-3 px-3 text-right text-slate-700 dark:text-slate-300 font-medium">
+                        {row.kilometros.toFixed(1)} km
+                      </td>
+                      <td className="py-3 px-3 text-right text-cyan-600 dark:text-cyan-400 font-bold whitespace-nowrap">
+                        {rowYield !== null ? formatCurrency(rowYield) : 'No disponible'}
+                      </td>
+                    </tr>
+                  );
+                })}
 
                 {reports.length === 0 && (
                   <tr>
@@ -607,7 +618,7 @@ export const ReportsView: React.FC = () => {
                     </td>
                     <td className="py-3.5 px-3 text-right">{totals.kilometros.toFixed(1)} km</td>
                     <td className="py-3.5 px-3 text-right text-cyan-600 dark:text-cyan-400">
-                      {formatCurrency(avgRendimientoHora)}
+                      {rendimientoOperativoHora !== null ? formatCurrency(rendimientoOperativoHora) : 'No disponible'}
                     </td>
                   </tr>
                 </tfoot>

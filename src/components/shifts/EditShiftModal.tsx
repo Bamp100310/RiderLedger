@@ -23,6 +23,9 @@ export const EditShiftModal: React.FC<EditShiftModalProps> = ({
   const [esperaHoras, setEsperaHoras] = useState(0);
   const [esperaMinutos, setEsperaMinutos] = useState(0);
   const [kilometros, setKilometros] = useState('0.0');
+  const [odometerStart, setOdometerStart] = useState('');
+  const [odometerEnd, setOdometerEnd] = useState('');
+  const [showOdometerInputs, setShowOdometerInputs] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -37,6 +40,11 @@ export const EditShiftModal: React.FC<EditShiftModalProps> = ({
       setEsperaMinutos(esp.minutes);
 
       setKilometros(String(shift.kilometros ?? '0.0'));
+      setOdometerStart(shift.odometer_start !== undefined && shift.odometer_start !== null ? String(shift.odometer_start) : '');
+      setOdometerEnd(shift.odometer_end !== undefined && shift.odometer_end !== null ? String(shift.odometer_end) : '');
+      if (shift.odometer_start !== undefined && shift.odometer_start !== null) {
+        setShowOdometerInputs(true);
+      }
     }
   }, [shift]);
 
@@ -46,6 +54,11 @@ export const EditShiftModal: React.FC<EditShiftModalProps> = ({
   const totalEsperaMin = toTotalMinutes(esperaHoras, esperaMinutos);
   const totalMin = totalRepartoMin + totalEsperaMin;
   const ratioProductividad = totalMin > 0 ? Math.round((totalRepartoMin / totalMin) * 100) : 0;
+
+  const numOdoStart = odometerStart.trim() !== '' ? parseFloat(odometerStart) : null;
+  const numOdoEnd = odometerEnd.trim() !== '' ? parseFloat(odometerEnd) : null;
+  const hasValidOdometer = numOdoStart !== null && numOdoEnd !== null && !isNaN(numOdoStart) && !isNaN(numOdoEnd) && numOdoEnd >= numOdoStart;
+  const odoCalculatedDistance = hasValidOdometer ? (numOdoEnd - numOdoStart).toFixed(1) : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,14 +71,22 @@ export const EditShiftModal: React.FC<EditShiftModalProps> = ({
       return;
     }
 
+    if (numOdoStart !== null && numOdoEnd !== null && numOdoEnd < numOdoStart) {
+      alert('El odómetro final no puede ser menor al inicial.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      const finalKm = hasValidOdometer ? (numOdoEnd! - numOdoStart!) : (parseFloat(kilometros) || 0);
       await updateShift({
         ...shift,
         fecha,
         tiempo_reparto_minutos: totalRepartoMin,
         tiempo_espera_minutos: totalEsperaMin,
-        kilometros: parseFloat(kilometros) || 0
+        kilometros: finalKm,
+        odometer_start: numOdoStart !== null && !isNaN(numOdoStart) ? numOdoStart : null,
+        odometer_end: numOdoEnd !== null && !isNaN(numOdoEnd) ? numOdoEnd : null
       });
       onClose();
     } catch (err) {
@@ -259,20 +280,74 @@ export const EditShiftModal: React.FC<EditShiftModalProps> = ({
             </div>
           </div>
 
-          {/* Kilómetros */}
-          <div>
-            <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1 flex items-center gap-1.5">
-              <Gauge className="w-3.5 h-3.5 text-purple-500" />
-              Kilómetros Recorridos
-            </label>
+          {/* Kilómetros Recorridos y Lectura de Odómetro Físico */}
+          <div className="bg-slate-50 dark:bg-slate-900/50 p-3.5 rounded-2xl border border-slate-200 dark:border-white/5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Gauge className="w-3.5 h-3.5 text-purple-500" />
+                Kilómetros Recorridos
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowOdometerInputs(!showOdometerInputs)}
+                className="text-[11px] text-purple-500 dark:text-purple-400 hover:underline font-medium cursor-pointer"
+              >
+                {showOdometerInputs ? 'Ocultar Odómetro Físico' : '+ Lectura Odómetro Físico'}
+              </button>
+            </div>
+
+            {showOdometerInputs && (
+              <div className="p-2.5 rounded-xl bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-white/10 space-y-2 text-xs">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Lecturas del odómetro en el tablero físico para cálculo automático.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">Odómetro Inicial</span>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="ej. 12450"
+                      value={odometerStart}
+                      onChange={e => setOdometerStart(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block mb-1">Odómetro Final</span>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="ej. 12495"
+                      value={odometerEnd}
+                      onChange={e => setOdometerEnd(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+                </div>
+
+                {hasValidOdometer && (
+                  <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-1 rounded">
+                    ✓ Distancia calculada por odómetro: {odoCalculatedDistance} km
+                  </div>
+                )}
+                {numOdoStart !== null && numOdoEnd !== null && numOdoEnd < numOdoStart && (
+                  <div className="text-[11px] text-rose-500 dark:text-rose-400 font-medium bg-rose-500/10 px-2 py-1 rounded">
+                    ⚠ El odómetro final no puede ser menor al inicial.
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="relative">
               <input
                 type="number"
                 step="0.1"
                 min="0"
-                value={kilometros}
+                value={hasValidOdometer ? odoCalculatedDistance! : kilometros}
                 onChange={e => setKilometros(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white font-bold focus:outline-none focus:border-purple-500 transition-colors pr-12"
+                disabled={hasValidOdometer}
+                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white font-bold focus:outline-none focus:border-purple-500 transition-colors pr-12 disabled:opacity-75"
               />
               <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
                 km

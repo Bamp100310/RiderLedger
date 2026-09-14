@@ -72,20 +72,20 @@ export const OperationalMetrics: React.FC = () => {
 
         {/* 2. Rendimiento por Hora */}
         <div className="bg-slate-950/50 p-2.5 rounded-xl border border-white/5 text-center">
-          <span className="text-[10px] font-semibold text-slate-400 block mb-0.5">Ganancia / Hora</span>
+          <span className="text-[10px] font-semibold text-slate-400 block mb-0.5">Rendimiento Operativo / h</span>
           <p className="text-sm sm:text-base font-black text-cyan-400">
-            {formatCurrency(summary.rendimientoPorHora)}
+            {summary.rendimientoPorHora !== null ? formatCurrency(summary.rendimientoPorHora) : 'No disponible'}
           </p>
           <span className="text-[9px] text-slate-400">por hora total</span>
         </div>
 
         {/* 3. Rendimiento por Km */}
         <div className="bg-slate-950/50 p-2.5 rounded-xl border border-white/5 text-center">
-          <span className="text-[10px] font-semibold text-slate-400 block mb-0.5">Ganancia / Km</span>
+          <span className="text-[10px] font-semibold text-slate-400 block mb-0.5">Rendimiento Operativo / km</span>
           <p className="text-sm sm:text-base font-black text-indigo-400">
-            {formatCurrency(summary.rendimientoPorKm)}
+            {summary.rendimientoPorKm !== null ? formatCurrency(summary.rendimientoPorKm) : 'No disponible'}
           </p>
-          <span className="text-[9px] text-slate-400">{summary.kilometrosTotales.toFixed(0)} km totales</span>
+          <span className="text-[9px] text-slate-400">{summary.kilometrosTotales.toFixed(0)} km recorridos</span>
         </div>
       </div>
     </div>

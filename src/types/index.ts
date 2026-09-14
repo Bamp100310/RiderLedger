@@ -16,6 +16,8 @@ export interface Shift {
   tiempo_reparto_minutos: number;
   tiempo_espera_minutos: number;
   kilometros: number;
+  odometer_start?: number | null;
+  odometer_end?: number | null;
   created_at?: string;
   sync_status?: 'synced' | 'pending' | 'error';
 }
@@ -35,10 +37,11 @@ export interface Transaction {
   sync_status?: 'synced' | 'pending' | 'error';
 }
 
-export type TimeRange = 'hoy' | 'semana' | 'mes' | 'historico' | 'personalizado';
+export type TimeRange = 'hoy' | 'semana' | 'mes' | 'año' | 'historico' | 'personalizado';
 
 export interface DateFilter {
   range: TimeRange;
+  referenceDate: string; // YYYY-MM-DD (fecha focal para navegación temporal)
   startDate?: string;
   endDate?: string;
 }
@@ -72,6 +75,8 @@ export interface FinancialSummary {
   ingresosTotales: number;
   ingresosOperativos: number; // Solo DOMICILIOS + PASAJEROS (excluye OTROS_INGRESOS)
   gastosTotales: number;
+  gastosOperativos: number; // Gasolina, Mantenimiento, Acompañante
+  gastosPersonales: number; // Alimentación, gastos discrecionales
   superavitNeto: number;
   saldoApp: number;
   efectivoEnMano: number;
@@ -80,8 +85,12 @@ export interface FinancialSummary {
   totalMinutosTrabajados: number;
   ratioProductividad: number;
   kilometrosTotales: number;
-  rendimientoPorHora: number;
-  rendimientoPorKm: number;
+  // Métricas horarias inequívocas (con null si horas == 0 para 'No disponible'):
+  facturacionBrutaPorHora: number | null; // ingresos / horas
+  rendimientoOperativoPorHora: number | null; // (ingresos - costos directos ruta) / horas
+  flujoNetoPorHora: number | null; // superavit neto / horas
+  rendimientoPorHora: number; // compatibilidad regresiva
+  rendimientoPorKm: number | null; // ingresos operativos / km (null si km == 0)
   totalTransacciones: number;
   totalTurnos: number;
 }
@@ -177,14 +186,18 @@ export interface ThreeTierFinancials {
   resultadoOperativo: number;
   margenOperativoPct: number;
 
-  // Nivel B: Después de obligaciones (¿Cuánto queda tras pagar deudas?)
+  // Nivel B: Después de obligaciones (¿Cuánto queda tras pagar deudas del período?)
+  pagosDeudaEfectivosPeriodo: number; // Pagos reales realizados en el período filtrado
+  obligacionesMensualesPactadas: number; // Cuotas pactadas del mes (para planificación)
   cuotasCreditosMes: number;
   pagosTarjetasMes: number;
   totalObligacionesDeuda: number;
-  resultadoDespuesObligaciones: number;
+  resultadoDespuesObligaciones: number; // resultadoOperativo - pagosDeudaEfectivosPeriodo
 
   // Nivel C: Flujo de caja disponible (Libre para ahorro, abonos o imprevistos)
-  flujoDisponible: number;
+  flujoDisponible: number; // resultadoDespuesObligaciones + otrosIngresos - gastosPersonales
+  otrosIngresos: number;
+  gastosPersonales: number;
   efectivoEnMano: number;
   saldoApp: number;
 }
@@ -278,13 +291,27 @@ export interface SavingsAndEmergencyHealth {
 }
 
 export interface SaveVsPayRecommendation {
-  prioridadPrincipal: 'CREAR_FONDO_EMERGENCIA' | 'ABONAR_DEUDA_INTERES_ALTO' | 'RESERVA_OBLIGACIONES' | 'EQUILIBRIO_AHORRO_ABONO';
+  prioridadPrincipal: 'CREAR_FONDO_EMERGENCIA' | 'ABONAR_DEUDA_INTERES_ALTO' | 'RESERVA_OBLIGACIONES' | 'EQUILIBRIO_AHORRO_ABONO' | 'DEFICIT_RECUPERAR_FLUJO';
   titulo: string;
   explicacion: string;
   montoRecomendadoAbono: number;
   montoRecomendadoAhorro: number;
   ahorroInteresEstimadoTexto?: string;
   resilienciaTexto: string;
+  esDeficit?: boolean;
+  tasaIncompleta?: boolean;
+}
+
+export interface ShiftGroupedPeriod {
+  periodoKey: string; // ej: "2026-09", "2026-W37"
+  periodoLabel: string; // ej: "Septiembre 2026"
+  horasTotales: number;
+  horasFormatted: string;
+  kilometros: number;
+  ingresos: number;
+  gastosRuta: number;
+  rendimientoOperativoHora: number | null;
+  totalTurnos: number;
 }
 
 export interface DashboardInsight {

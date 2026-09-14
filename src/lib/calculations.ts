@@ -18,7 +18,9 @@ import type {
   SavingsAndEmergencyHealth,
   SaveVsPayRecommendation,
   DashboardInsight,
-  CalendarPeriodBarItem
+  CalendarPeriodBarItem,
+  ShiftGroupedPeriod,
+  DateFilter
 } from '../types/index.ts';
 
 /**
@@ -142,51 +144,76 @@ export function getLocalDateString(date: Date = new Date()): string {
 }
 
 /**
- * Determina si una fecha está dentro del rango seleccionado
+ * Calcula la distancia recorrida en un turno:
+ * 1. Si odometer_start y odometer_end son válidos y end > start, usa end - start.
+ * 2. Si no, usa el valor de kilometros registrado.
+ */
+export function calculateShiftDistance(shift: {
+  kilometros?: number;
+  odometer_start?: number | null;
+  odometer_end?: number | null;
+}): number {
+  if (
+    typeof shift.odometer_start === 'number' &&
+    typeof shift.odometer_end === 'number' &&
+    !isNaN(shift.odometer_start) &&
+    !isNaN(shift.odometer_end) &&
+    shift.odometer_end > shift.odometer_start
+  ) {
+    return Math.round((shift.odometer_end - shift.odometer_start) * 100) / 100;
+  }
+  return Math.max(0, Number(shift.kilometros) || 0);
+}
+
+/**
+ * Determina si una fecha está dentro del rango seleccionado respecto a la fecha focal (referenceDate)
  */
 export function isDateInRange(
   dateStr: string,
   range: TimeRange,
   customStart?: string,
-  customEnd?: string
+  customEnd?: string,
+  referenceDateStr?: string
 ): boolean {
   if (!dateStr) return false;
   if (range === 'historico') return true;
 
-  const todayStr = getLocalDateString();
+  const ref = parseLocalDate(referenceDateStr || getLocalDateString());
+  const targetDate = parseLocalDate(dateStr);
   
   if (range === 'hoy') {
-    return dateStr === todayStr;
+    return dateStr === getLocalDateString(ref);
   }
-
-  const targetDate = new Date(`${dateStr}T00:00:00`);
-  const now = new Date();
   
   if (range === 'semana') {
-    // Lunes de la semana actual
-    const currentDay = now.getDay();
+    // Lunes de la semana de la fecha focal
+    const currentDay = ref.getDay();
     const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - distanceToMonday);
-    monday.setHours(0, 0, 0, 0);
-
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    sunday.setHours(23, 59, 59, 999);
+    const monday = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - distanceToMonday, 0, 0, 0);
+    const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6, 23, 59, 59);
 
     return targetDate >= monday && targetDate <= sunday;
   }
 
   if (range === 'mes') {
-    // Primer y último día del mes actual
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    // Primer y último día del mes de la fecha focal
+    const startOfMonth = new Date(ref.getFullYear(), ref.getMonth(), 1, 0, 0, 0);
+    const endOfMonth = new Date(ref.getFullYear(), ref.getMonth() + 1, 0, 23, 59, 59);
     return targetDate >= startOfMonth && targetDate <= endOfMonth;
   }
 
+  if (range === 'año') {
+    // Primer y último día del año de la fecha focal
+    const startOfYear = new Date(ref.getFullYear(), 0, 1, 0, 0, 0);
+    const endOfYear = new Date(ref.getFullYear(), 11, 31, 23, 59, 59);
+    return targetDate >= startOfYear && targetDate <= endOfYear;
+  }
+
   if (range === 'personalizado' && customStart && customEnd) {
-    const start = new Date(`${customStart}T00:00:00`);
-    const end = new Date(`${customEnd}T23:59:59`);
+    const start = parseLocalDate(customStart);
+    start.setHours(0, 0, 0, 0);
+    const end = parseLocalDate(customEnd);
+    end.setHours(23, 59, 59, 999);
     return targetDate >= start && targetDate <= end;
   }
 
@@ -194,7 +221,84 @@ export function isDateInRange(
 }
 
 /**
- * Calcula todas las métricas financieras y operativas del negocio
+ * Navega hacia adelante (+1) o hacia atrás (-1) en el período activo
+ */
+export function navigatePeriod(filter: { range: TimeRange; referenceDate: string; startDate?: string; endDate?: string }, direction: -1 | 1) {
+  if (filter.range === 'historico') return filter;
+  const ref = parseLocalDate(filter.referenceDate || getLocalDateString());
+  const nextDate = new Date(ref);
+
+  if (filter.range === 'hoy') {
+    nextDate.setDate(ref.getDate() + direction);
+  } else if (filter.range === 'semana') {
+    nextDate.setDate(ref.getDate() + (direction * 7));
+  } else if (filter.range === 'mes') {
+    nextDate.setMonth(ref.getMonth() + direction);
+  } else if (filter.range === 'año') {
+    nextDate.setFullYear(ref.getFullYear() + direction);
+  } else if (filter.range === 'personalizado' && filter.startDate && filter.endDate) {
+    const s = parseLocalDate(filter.startDate);
+    const e = parseLocalDate(filter.endDate);
+    const diffDays = Math.max(1, Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24))) + 1;
+    const newStart = new Date(s.getFullYear(), s.getMonth(), s.getDate() + (direction * diffDays), 12, 0, 0);
+    const newEnd = new Date(e.getFullYear(), e.getMonth(), e.getDate() + (direction * diffDays), 12, 0, 0);
+    return {
+      ...filter,
+      referenceDate: getLocalDateString(newStart),
+      startDate: getLocalDateString(newStart),
+      endDate: getLocalDateString(newEnd)
+    };
+  }
+
+  return {
+    ...filter,
+    referenceDate: getLocalDateString(nextDate)
+  };
+}
+
+/**
+ * Retorna la etiqueta legible del período actual (ej: "Septiembre 2026", "Sem. 37 (8 - 14 Sep)")
+ */
+export function getPeriodLabel(filter: { range: TimeRange; referenceDate: string; startDate?: string; endDate?: string }): string {
+  if (filter.range === 'historico') return 'Acumulado Histórico';
+  const ref = parseLocalDate(filter.referenceDate || getLocalDateString());
+  const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const mesesCortos = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+  if (filter.range === 'hoy') {
+    const todayStr = getLocalDateString();
+    const isToday = getLocalDateString(ref) === todayStr;
+    return `${isToday ? 'Hoy, ' : ''}${ref.getDate()} de ${meses[ref.getMonth()]} ${ref.getFullYear()}`;
+  }
+
+  if (filter.range === 'semana') {
+    const currentDay = ref.getDay();
+    const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
+    const monday = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - distanceToMonday, 12, 0, 0);
+    const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6, 12, 0, 0);
+
+    const monLabel = `${monday.getDate()} ${mesesCortos[monday.getMonth()]}`;
+    const sunLabel = `${sunday.getDate()} ${mesesCortos[sunday.getMonth()]}`;
+    return `Semana ${monLabel} — ${sunLabel} ${sunday.getFullYear()}`;
+  }
+
+  if (filter.range === 'mes') {
+    return `${meses[ref.getMonth()]} ${ref.getFullYear()}`;
+  }
+
+  if (filter.range === 'año') {
+    return `Año ${ref.getFullYear()}`;
+  }
+
+  if (filter.range === 'personalizado' && filter.startDate && filter.endDate) {
+    return `${filter.startDate} → ${filter.endDate}`;
+  }
+
+  return 'Período Seleccionado';
+}
+
+/**
+ * Calcula todas las métricas financieras y operativas del negocio con distinciones horarias inequívocas
  */
 export function calculateFinancialSummary(
   shifts: Shift[],
@@ -203,6 +307,8 @@ export function calculateFinancialSummary(
   let ingresosTotales = 0;
   let ingresosOperativos = 0; // Solo DOMICILIOS + PASAJEROS (excluye OTROS_INGRESOS)
   let gastosTotales = 0;
+  let gastosOperativos = 0; // Costos directos de ruta: Combustible, Mantenimiento, Acompañante
+  let gastosPersonales = 0; // Alimentación y otros gastos no de ruta
   let saldoAppTarifasPropinas = 0;
   let cobrosEfectivoApp = 0;
   let ingresosEfectivo = 0;
@@ -214,12 +320,11 @@ export function calculateFinancialSummary(
     if (t.tipo === 'INGRESO') {
       ingresosTotales += monto;
 
-      // Ingresos operativos: solo domicilios y pasajeros (excluye OTROS_INGRESOS)
+      // Ingresos operativos: solo domicilios y pasajeros
       if (t.categoria === 'DOMICILIOS' || t.categoria === 'PASAJEROS') {
         ingresosOperativos += monto;
       }
 
-      // Si el ingreso se registró a través de la App
       if (t.medio_pago === 'APP') {
         saldoAppTarifasPropinas += monto;
       } else if (t.medio_pago === 'EFECTIVO') {
@@ -228,18 +333,22 @@ export function calculateFinancialSummary(
     } else if (t.tipo === 'GASTO') {
       gastosTotales += monto;
 
+      if (['COMBUSTIBLE', 'MANTENIMIENTO_MOTO', 'HONORARIOS_ACOMPANANTE'].includes(t.categoria)) {
+        gastosOperativos += monto;
+      } else if (t.categoria !== 'CUOTA_CREDITO') {
+        gastosPersonales += monto;
+      }
+
       if (t.medio_pago === 'EFECTIVO') {
         gastosEfectivo += monto;
       }
     } else if (t.tipo === 'COBRO_EFECTIVO_APP') {
-      // Dinero cobrado en efectivo al cliente por pedido de App.
-      // Entra al bolsillo físico del repartidor, pero crea deuda con la plataforma.
       cobrosEfectivoApp += monto;
       ingresosEfectivo += monto;
     }
   }
 
-  // Métricas Operativas de Turnos
+  // Métricas Operativas de Turnos con soporte para odómetro
   let totalMinutosReparto = 0;
   let totalMinutosEspera = 0;
   let kilometrosTotales = 0;
@@ -247,7 +356,7 @@ export function calculateFinancialSummary(
   for (const s of shifts) {
     totalMinutosReparto += Number(s.tiempo_reparto_minutos) || 0;
     totalMinutosEspera += Number(s.tiempo_espera_minutos) || 0;
-    kilometrosTotales += Number(s.kilometros) || 0;
+    kilometrosTotales += calculateShiftDistance(s);
   }
 
   const totalMinutosTrabajados = totalMinutosReparto + totalMinutosEspera;
@@ -256,29 +365,25 @@ export function calculateFinancialSummary(
     : 0;
 
   // Fórmulas requeridas
-  // 1. Superávit Neto = Ingresos Brutos Totales - Gastos Totales
   const superavitNeto = ingresosTotales - gastosTotales;
-
-  // 2. Saldo App = (Tarifas + Propinas en App) - Cobros Efectivo App
-  // Positivo: Plataforma le debe al repartidor. Negativo: Repartidor le debe a la plataforma.
   const saldoApp = saldoAppTarifasPropinas - cobrosEfectivoApp;
-
-  // 3. Efectivo en Mano Físico = Sum(Ingresos y Cobros en Efectivo) - Sum(Gastos en Efectivo)
   const efectivoEnMano = ingresosEfectivo - gastosEfectivo;
 
-  // 4. Rendimiento por hora = Ingresos OPERATIVOS / Horas Totales
-  //    (excluye OTROS_INGRESOS para no inflar la productividad real)
+  // Métricas horarias inequívocas (null si totalHoras === 0 para diferenciar "$0" de "No disponible")
   const totalHoras = totalMinutosTrabajados / 60;
-  const rendimientoPorHora = totalHoras > 0 ? ingresosOperativos / totalHoras : 0;
-
-  // 5. Rendimiento por km = Ingresos OPERATIVOS / Kilómetros Totales
-  //    (excluye OTROS_INGRESOS para no inflar la productividad real)
-  const rendimientoPorKm = kilometrosTotales > 0 ? ingresosOperativos / kilometrosTotales : 0;
+  const facturacionBrutaPorHora = totalHoras > 0 ? Math.round(ingresosTotales / totalHoras) : null;
+  const rendimientoOperativoPorHora = totalHoras > 0 ? Math.round((ingresosOperativos - gastosOperativos) / totalHoras) : null;
+  const flujoNetoPorHora = totalHoras > 0 ? Math.round(superavitNeto / totalHoras) : null;
+  
+  // Rendimiento por km (null si kilometrosTotales === 0)
+  const rendimientoPorKm = kilometrosTotales > 0 ? Math.round(ingresosOperativos / kilometrosTotales) : null;
 
   return {
     ingresosTotales,
     ingresosOperativos,
     gastosTotales,
+    gastosOperativos,
+    gastosPersonales,
     superavitNeto,
     saldoApp,
     efectivoEnMano,
@@ -287,7 +392,10 @@ export function calculateFinancialSummary(
     totalMinutosTrabajados,
     ratioProductividad,
     kilometrosTotales,
-    rendimientoPorHora,
+    facturacionBrutaPorHora,
+    rendimientoOperativoPorHora,
+    flujoNetoPorHora,
+    rendimientoPorHora: rendimientoOperativoPorHora ?? 0,
     rendimientoPorKm,
     totalTransacciones: transactions.length,
     totalTurnos: shifts.length
@@ -440,7 +548,7 @@ export function generateConsolidatedReport(
     const item = getOrCreate(key, label);
     item.minutosReparto += Number(s.tiempo_reparto_minutos) || 0;
     item.minutosEspera += Number(s.tiempo_espera_minutos) || 0;
-    item.kilometros += Number(s.kilometros) || 0;
+    item.kilometros += calculateShiftDistance(s);
   }
 
   // Convertir a lista y ordenar por fecha descendente
@@ -817,6 +925,45 @@ export function getPeriodFinancialChartData(
     return getCalendarMonthFinancialData(transactions, referenceDate.getFullYear(), referenceDate.getMonth());
   }
 
+  if (range === 'año') {
+    const year = referenceDate.getFullYear();
+    const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const items: CalendarPeriodBarItem[] = monthNames.map((name, idx) => {
+      const mStr = String(idx + 1).padStart(2, '0');
+      return createEmptyCalendarPeriodBarItem(`${year}-${mStr}`, `${name}`);
+    });
+
+    for (const t of transactions) {
+      if (!t.fecha.startsWith(`${year}-`)) continue;
+      const parts = t.fecha.split('-');
+      const mIdx = Number(parts[1]) - 1;
+      if (mIdx >= 0 && mIdx < 12) {
+        const item = items[mIdx];
+        item.sinActividad = false;
+        const monto = Number(t.monto) || 0;
+        if (t.tipo === 'INGRESO') {
+          item.Ingresos += monto;
+          if (t.categoria === 'DOMICILIOS') item.Domicilios += monto;
+          else if (t.categoria === 'PASAJEROS') item.Pasajeros += monto;
+          else item.OtrosIngresos += monto;
+        } else if (t.tipo === 'GASTO') {
+          item.Gastos += monto;
+          if (t.categoria === 'COMBUSTIBLE') item.Combustible += monto;
+          else if (
+            t.categoria === 'HONORARIOS_ACOMPANANTE' ||
+            (t.subcategoria && (t.subcategoria.toLowerCase().includes('acompañante') || t.subcategoria.toLowerCase().includes('jhony')))
+          ) item.Acompanante += monto;
+          else if (t.categoria === 'ALIMENTACION') item.Alimentacion += monto;
+          else if (t.categoria === 'MANTENIMIENTO_MOTO') item.Mantenimiento += monto;
+          else if (t.categoria === 'CUOTA_CREDITO') item.CuotaCredito += monto;
+          else item.OtrosGastos += monto;
+        }
+        item.Superavit = item.Ingresos - item.Gastos;
+      }
+    }
+    return items;
+  }
+
   if (range === 'historico') {
     if (historicalGranularity === 'mes') {
       return getHistoricalMonthsFinancialData(transactions);
@@ -996,6 +1143,10 @@ export function comparePeriods(
 /**
  * Calcula los 3 conceptos financieros fundamentales (Operativo, Después de Obligaciones, Flujo Disponible)
  */
+/**
+ * Calcula los 3 conceptos financieros fundamentales (Operativo, Después de Obligaciones, Flujo Disponible)
+ * respetando estrictamente la separación entre obligaciones mensuales planificadas y pagos reales del período.
+ */
 export function calculateThreeTierFinancials(
   transactions: Transaction[],
   shifts: Shift[] = [],
@@ -1004,8 +1155,9 @@ export function calculateThreeTierFinancials(
 ): ThreeTierFinancials {
   let ingresosOperativos = 0;
   let otrosIngresos = 0;
-  let gastosOperativos = 0;
-  let otrosGastos = 0;
+  let gastosOperativos = 0; // Combustible, Mantenimiento, Acompañante
+  let gastosPersonales = 0; // Alimentación y otros gastos no de ruta
+  let pagosDeudaEfectivosPeriodo = 0; // Transacciones reales de CUOTA_CREDITO en el período
   let saldoAppTarifas = 0;
   let cobrosEfectivoApp = 0;
   let efectivoIngreso = 0;
@@ -1024,11 +1176,11 @@ export function calculateThreeTierFinancials(
       if (t.medio_pago === 'EFECTIVO') efectivoIngreso += monto;
     } else if (t.tipo === 'GASTO') {
       if (t.categoria === 'CUOTA_CREDITO') {
-        // Obligación de deuda
-      } else if (['COMBUSTIBLE', 'MANTENIMIENTO_MOTO', 'ALIMENTACION', 'HONORARIOS_ACOMPANANTE'].includes(t.categoria)) {
+        pagosDeudaEfectivosPeriodo += monto;
+      } else if (['COMBUSTIBLE', 'MANTENIMIENTO_MOTO', 'HONORARIOS_ACOMPANANTE'].includes(t.categoria)) {
         gastosOperativos += monto;
       } else {
-        otrosGastos += monto;
+        gastosPersonales += monto;
       }
 
       if (t.medio_pago === 'EFECTIVO') efectivoGasto += monto;
@@ -1038,20 +1190,21 @@ export function calculateThreeTierFinancials(
     }
   }
 
-  // Cuotas de créditos activos para el mes
+  // Obligaciones pactadas del mes (para planificación mensual informativa)
   const cuotasCreditosMes = credits.reduce((sum, c) => sum + (Number(c.montoCuota) || 0), 0);
   const pagosTarjetasMes = cards.reduce((sum, card) => sum + (Number(card.pagoMinimo) || 0), 0);
   const totalObligacionesDeuda = cuotasCreditosMes + pagosTarjetasMes;
+  const obligacionesMensualesPactadas = totalObligacionesDeuda;
 
-  // Nivel A: Resultado Operativo
+  // Nivel A: Resultado Operativo (Ingresos de Reparto - Costos Directos de Ruta)
   const resultadoOperativo = ingresosOperativos - gastosOperativos;
   const margenOperativoPct = ingresosOperativos > 0 ? Math.round((resultadoOperativo / ingresosOperativos) * 100) : 0;
 
-  // Nivel B: Después de Obligaciones
-  const resultadoDespuesObligaciones = resultadoOperativo - totalObligacionesDeuda;
+  // Nivel B: Después de Obligaciones (Resultado Operativo - Pagos de deuda efectivamente realizados en el período)
+  const resultadoDespuesObligaciones = resultadoOperativo - pagosDeudaEfectivosPeriodo;
 
-  // Nivel C: Flujo Disponible
-  const flujoDisponible = resultadoDespuesObligaciones + otrosIngresos - otrosGastos;
+  // Nivel C: Flujo Disponible (Resultado tras Obligaciones + Otros Ingresos - Gastos Personales)
+  const flujoDisponible = resultadoDespuesObligaciones + otrosIngresos - gastosPersonales;
   const efectivoEnMano = efectivoIngreso - efectivoGasto;
   const saldoApp = saldoAppTarifas - cobrosEfectivoApp;
 
@@ -1060,11 +1213,15 @@ export function calculateThreeTierFinancials(
     gastosOperativos,
     resultadoOperativo,
     margenOperativoPct,
+    pagosDeudaEfectivosPeriodo,
+    obligacionesMensualesPactadas,
     cuotasCreditosMes,
     pagosTarjetasMes,
     totalObligacionesDeuda,
     resultadoDespuesObligaciones,
     flujoDisponible,
+    otrosIngresos,
+    gastosPersonales,
     efectivoEnMano,
     saldoApp
   };
@@ -1092,6 +1249,7 @@ export function calculateLaborBenchmark(
 
   // Finanzas del período
   let ingresosOperativos = 0;
+  let gastosRuta = 0;
   let gastosTotales = 0;
   for (const t of transactions) {
     const monto = Number(t.monto) || 0;
@@ -1100,13 +1258,16 @@ export function calculateLaborBenchmark(
     }
     if (t.tipo === 'GASTO') {
       gastosTotales += monto;
+      if (['COMBUSTIBLE', 'MANTENIMIENTO_MOTO', 'HONORARIOS_ACOMPANANTE'].includes(t.categoria)) {
+        gastosRuta += monto;
+      }
     }
   }
   const superavitNeto = ingresosOperativos - gastosTotales;
 
   const ingresoBrutoPorHora = horasTotalesTrabajadas > 0 ? Math.round(ingresosOperativos / horasTotalesTrabajadas) : 0;
   const ingresoNetoEfectivoPorHora = horasTotalesTrabajadas > 0 ? Math.round(superavitNeto / horasTotalesTrabajadas) : 0;
-  const flujoDisponiblePorHora = ingresoNetoEfectivoPorHora; // aproximación operativa directa
+  const flujoDisponiblePorHora = ingresoNetoEfectivoPorHora;
 
   const refMensualHoras = settings.horasMensualesReferencia || 182;
   const refMinimoIngreso = settings.metaIngresoMinimoMensual || 1750905;
@@ -1134,7 +1295,7 @@ export function calculateLaborBenchmark(
     estadoCargaLaboral = 'ALTA';
   }
 
-  // Generación de explicaciones que no diagnostican jurídicamente sino que guían financieramente
+  // Generación de explicaciones contextuales que no diagnostican jurídicamente sino que guían financieramente
   let explicacionLaboral = '';
   let recomendacionLaboral = '';
 
@@ -1178,7 +1339,7 @@ export function calculateLaborBenchmark(
 }
 
 /**
- * Clasifica los gastos y evalúa la salud presupuestaria bajo el marco 50/30/20 adaptable
+ * Clasifica los gastos y evalúa la salud presupuestaria bajo el marco 50/30/20 adaptable sobre el ingreso
  */
 export function analyzeExpenseHealth(
   transactions: Transaction[],
@@ -1204,7 +1365,7 @@ export function analyzeExpenseHealth(
   for (const [cat, monto] of categoryMap.entries()) {
     let clasificacion: ExpenseCategoryClassification = 'DISCRECIONAL';
     let clasificacionLabel = 'Discrecional';
-    let descripcion = 'Gasto no esencial para operar';
+    let descripcion = 'Gasto no esencial para operar con margen de optimización';
 
     if (cat === 'COMBUSTIBLE') {
       clasificacion = 'PRODUCTIVO';
@@ -1250,22 +1411,23 @@ export function analyzeExpenseHealth(
   }
 
   const ratioGastoIngresoPct = totalIngresos > 0 ? Math.round((totalGastos / totalIngresos) * 100) : 0;
-  const basePresupuesto = totalGastos > 0 ? totalGastos : 1;
+  // La regla 50/30/20 se evalúa sobre la base de Ingreso Total (o sobre Gastos si ingreso es 0)
+  const basePresupuesto = totalIngresos > 0 ? totalIngresos : (totalGastos > 0 ? totalGastos : 1);
 
   const porcentajeNecesidadesReal = Math.round((necesidadesTotal / basePresupuesto) * 100);
   const porcentajeDeseosReal = Math.round((deseosTotal / basePresupuesto) * 100);
   const porcentajeAhorroDeudaReal = Math.round((ahorroDeudaTotal / basePresupuesto) * 100);
 
-  let explicacion50_30_20 = `Distribución de tus egresos: ${porcentajeNecesidadesReal}% Necesidades operativas, ${porcentajeDeseosReal}% Discrecional, ${porcentajeAhorroDeudaReal}% Obligaciones. `;
+  let explicacion50_30_20 = `Distribución sobre tus ingresos: ${porcentajeNecesidadesReal}% Necesidades operativas, ${porcentajeDeseosReal}% Discrecional, ${porcentajeAhorroDeudaReal}% Obligaciones. `;
   if (porcentajeDeseosReal > (settings.porcentajeDeseosRef || 30)) {
-    explicacion50_30_20 += 'Tus gastos discrecionales superan la referencia del 30%, reduciendo tu capacidad de ahorro.';
+    explicacion50_30_20 += 'Los gastos discrecionales representan una proporción importante del ingreso con margen para optimizar.';
   } else {
     explicacion50_30_20 += 'Tus gastos están mayoritariamente concentrados en necesidades operativas esenciales.';
   }
 
   let alertaGastos: string | null = null;
   if (ratioGastoIngresoPct > 85) {
-    alertaGastos = 'Tus gastos están absorbiendo más del 85% de tus ingresos. Revisa combustible y comidas en calle.';
+    alertaGastos = 'Tus gastos están absorbiendo más del 85% de tus ingresos. Revisa combustible y compras discrecionales.';
   }
 
   return {
@@ -1318,7 +1480,7 @@ export function analyzeCreditCards(cards: CreditCardAccount[]): CreditCardAnalys
 }
 
 /**
- * Motor de decisión: "¿Ahorrar o Abonar a Capital?" basado en resiliencia y tasas reales
+ * Motor de decisión: "¿Ahorrar o Abonar a Capital?" con detección de déficit y fallbacks de tasas
  */
 export function recommendSaveVsPayDebt(
   availableCash: number,
@@ -1328,40 +1490,66 @@ export function recommendSaveVsPayDebt(
   essentialExpenses: number = 0,
   settings: FinancialSettings = DEFAULT_FINANCIAL_SETTINGS
 ): SaveVsPayRecommendation {
-  const totalDeuda = credits.reduce((sum, c) => sum + (Number(c.montoCuota) || 0), 0) +
-    cards.reduce((sum, card) => sum + (Number(card.saldoUtilizado) || 0), 0);
+  // 0. Si el flujo es negativo o nulo -> DÉFICIT
+  if (availableCash <= 0) {
+    return {
+      prioridadPrincipal: 'DEFICIT_RECUPERAR_FLUJO',
+      esDeficit: true,
+      titulo: 'Flujo de caja en déficit: Prioriza recuperar balance',
+      explicacion: 'En este período tus egresos y obligaciones superan los ingresos generados. Antes de planificar ahorro voluntario o abonos extraordinarios a capital, el objetivo prioritario es contener gastos de ruta y maximizar las horas de alta demanda.',
+      montoRecomendadoAbono: 0,
+      montoRecomendadoAhorro: 0,
+      resilienciaTexto: 'La estabilidad operativa diaria es indispensable antes de asumir compromisos de ahorro o abono adicional.'
+    };
+  }
 
   const mesesReserva = essentialExpenses > 0 ? currentSavings / essentialExpenses : 0;
   const safeCash = Math.max(0, availableCash);
 
   // 1. Si no existe un colchón básico (menos de 1 mes de gastos esenciales) -> Priorizar Fondo de Emergencia
-  if (mesesReserva < 1 && safeCash > 0) {
+  if (mesesReserva < 1) {
     const destinoAhorro = Math.round(safeCash * 0.75);
     const destinoAbono = safeCash - destinoAhorro;
     return {
       prioridadPrincipal: 'CREAR_FONDO_EMERGENCIA',
       titulo: 'Prioriza fortalecer tu fondo de emergencia',
-      explicacion: `Tu reserva actual cubre aproximadamente ${mesesReserva.toFixed(1)} meses de gastos esenciales. Para evitar endeudarte ante un pinchazo o imprevisto, recomendamos destinar al menos $${formatCurrency(destinoAhorro)} a ahorro antes de abonar a capital.`,
+      explicacion: `Tu reserva actual cubre aproximadamente ${mesesReserva.toFixed(1)} meses de gastos esenciales. Para evitar endeudarte ante un pinchazo, repuesto o imprevisto, recomendamos destinar al menos $${formatCurrency(destinoAhorro)} a ahorro antes de abonar a capital.`,
       montoRecomendadoAhorro: destinoAhorro,
       montoRecomendadoAbono: destinoAbono,
-      resilienciaTexto: 'La resiliencia ante imprevistos es la primera barrera contra la deuda cara.'
+      resilienciaTexto: 'La resiliencia ante imprevistos es la primera barrera contra la deuda costosa.'
     };
   }
 
   // 2. Si hay deuda de tarjeta con saldo utilizado alto -> Abonar a deuda cara
-  const tarjetaCara = cards.find(c => c.saldoUtilizado > 0 && (c.tasaInteresEA || 25) > 20);
-  if (tarjetaCara && safeCash > 0) {
+  const tarjetaCara = cards.find(c => c.saldoUtilizado > 0 && (c.tasaInteresEA ?? 0) > 20);
+  const tarjetaSinTasa = cards.find(c => c.saldoUtilizado > 0 && typeof c.tasaInteresEA !== 'number');
+
+  if (tarjetaCara) {
     const destinoAbono = Math.round(safeCash * 0.7);
     const destinoAhorro = safeCash - destinoAbono;
-    const tasaStr = tarjetaCara.tasaInteresEA ? `${tarjetaCara.tasaInteresEA}% E.A.` : 'interés bancario de tarjeta';
+    const tasaStr = `${tarjetaCara.tasaInteresEA}% E.A.`;
     return {
       prioridadPrincipal: 'ABONAR_DEUDA_INTERES_ALTO',
       titulo: 'Abona a capital de tu tarjeta de crédito',
-      explicacion: `Tienes deuda activa en ${tarjetaCara.nombre} con una tasa estimada de ${tasaStr}. Abonar $${formatCurrency(destinoAbono)} a capital genera un ahorro financiero inmediato al reducir los intereses futuros.`,
+      explicacion: `Tienes deuda activa en ${tarjetaCara.nombre} con una tasa de ${tasaStr}. Abonar $${formatCurrency(destinoAbono)} a capital genera un ahorro financiero inmediato al reducir los intereses futuros.`,
       montoRecomendadoAbono: destinoAbono,
       montoRecomendadoAhorro: destinoAhorro,
-      ahorroInteresEstimadoTexto: `Abonar a capital en esta tarjeta reduce la base de cobro de intereses para el próximo corte.`,
+      ahorroInteresEstimadoTexto: 'Abonar a capital en esta tarjeta reduce la base de cobro de intereses para el próximo corte.',
       resilienciaTexto: 'Tienes un colchón básico de emergencia que te permite acelerar el pago de pasivos costosos.'
+    };
+  }
+
+  if (tarjetaSinTasa) {
+    const destinoAbono = Math.round(safeCash * 0.5);
+    const destinoAhorro = safeCash - destinoAbono;
+    return {
+      prioridadPrincipal: 'EQUILIBRIO_AHORRO_ABONO',
+      tasaIncompleta: true,
+      titulo: 'Equilibrio con deuda activa (Tasa no especificada)',
+      explicacion: `Tienes saldo utilizado en ${tarjetaSinTasa.nombre} pero no has registrado su tasa E.A. Sugerimos ingresar la tasa exacta para un cálculo preciso. Por ahora, dividimos el excedente al 50%.`,
+      montoRecomendadoAbono: destinoAbono,
+      montoRecomendadoAhorro: destinoAhorro,
+      resilienciaTexto: 'Conoce tus tasas de interés para saber si te conviene acelerar pagos.'
     };
   }
 
@@ -1375,6 +1563,103 @@ export function recommendSaveVsPayDebt(
     montoRecomendadoAhorro: mitad,
     resilienciaTexto: 'Mantienes liquidez en mano mientras continúas reduciendo pasivos.'
   };
+}
+
+/**
+ * Agrupa jornadas por mes, semana o día para análisis histórico comparativo
+ */
+export function groupShiftsByPeriod(
+  shifts: Shift[],
+  transactions: Transaction[],
+  groupBy: 'mes' | 'semana' | 'dia' = 'mes'
+): ShiftGroupedPeriod[] {
+  const map = new Map<string, {
+    key: string;
+    label: string;
+    totalMin: number;
+    kilometros: number;
+    ingresos: number;
+    gastosRuta: number;
+    turnos: number;
+  }>();
+
+  for (const s of shifts) {
+    const d = parseLocalDate(s.fecha);
+    let key = s.fecha;
+    let label = s.fecha;
+
+    if (groupBy === 'mes') {
+      key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+      label = `${meses[d.getMonth()]} ${d.getFullYear()}`;
+    } else if (groupBy === 'semana') {
+      const currentDay = d.getDay();
+      const distToMonday = currentDay === 0 ? 6 : currentDay - 1;
+      const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - distToMonday, 12, 0, 0);
+      key = getLocalDateString(monday);
+      label = `Sem. ${monday.getDate()}/${monday.getMonth() + 1}`;
+    }
+
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        label,
+        totalMin: 0,
+        kilometros: 0,
+        ingresos: 0,
+        gastosRuta: 0,
+        turnos: 0
+      });
+    }
+
+    const item = map.get(key)!;
+    item.totalMin += (Number(s.tiempo_reparto_minutos) || 0) + (Number(s.tiempo_espera_minutos) || 0);
+    item.kilometros += calculateShiftDistance(s);
+    item.turnos += 1;
+  }
+
+  // Asignar ingresos y costos de ruta del período
+  for (const t of transactions) {
+    const d = parseLocalDate(t.fecha);
+    let key = t.fecha;
+
+    if (groupBy === 'mes') {
+      key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    } else if (groupBy === 'semana') {
+      const currentDay = d.getDay();
+      const distToMonday = currentDay === 0 ? 6 : currentDay - 1;
+      const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - distToMonday, 12, 0, 0);
+      key = getLocalDateString(monday);
+    }
+
+    if (map.has(key)) {
+      const item = map.get(key)!;
+      const monto = Number(t.monto) || 0;
+      if (t.tipo === 'INGRESO' && (t.categoria === 'DOMICILIOS' || t.categoria === 'PASAJEROS')) {
+        item.ingresos += monto;
+      } else if (t.tipo === 'GASTO' && ['COMBUSTIBLE', 'MANTENIMIENTO_MOTO', 'HONORARIOS_ACOMPANANTE'].includes(t.categoria)) {
+        item.gastosRuta += monto;
+      }
+    }
+  }
+
+  return Array.from(map.values())
+    .sort((a, b) => b.key.localeCompare(a.key))
+    .map(item => {
+      const horas = item.totalMin / 60;
+      const rendimientoOperativoHora = horas > 0 ? Math.round((item.ingresos - item.gastosRuta) / horas) : null;
+      return {
+        periodoKey: item.key,
+        periodoLabel: item.label,
+        horasTotales: +horas.toFixed(1),
+        horasFormatted: formatMinutes(item.totalMin),
+        kilometros: +item.kilometros.toFixed(1),
+        ingresos: item.ingresos,
+        gastosRuta: item.gastosRuta,
+        rendimientoOperativoHora,
+        totalTurnos: item.turnos
+      };
+    });
 }
 
 /**

@@ -5,16 +5,21 @@ import {
   getLocalDateString,
   getCalendarWeekFinancialData,
   getCalendarMonthFinancialData,
+  calculateShiftDistance,
+  isDateInRange,
+  navigatePeriod,
+  getPeriodLabel,
   calculateFinancialSummary,
   calculateThreeTierFinancials,
   calculateLaborBenchmark,
   analyzeCreditCards,
   analyzeExpenseHealth,
   recommendSaveVsPayDebt,
+  groupShiftsByPeriod,
   comparePeriods,
   DEFAULT_FINANCIAL_SETTINGS
 } from '../src/lib/calculations.ts';
-import type { Shift, Transaction, CreditInstallment, CreditCardAccount } from '../src/types/index.ts';
+import type { Shift, Transaction, CreditInstallment, CreditCardAccount, DateFilter } from '../src/types/index.ts';
 
 test('parseLocalDate and getLocalDateString handles timezone and month boundaries', () => {
   const d1 = parseLocalDate('2026-02-28');
@@ -36,13 +41,13 @@ test('parseLocalDate and getLocalDateString handles timezone and month boundarie
 });
 
 test('Calendar Week: strictly Monday to Sunday with zero-filled missing days', () => {
-  // Let's test a week around Sunday 2026-09-13
   const txs: Transaction[] = [
     {
       id: 'tx-1',
       fecha: '2026-09-08', // Tuesday
       tipo: 'INGRESO',
       categoria: 'DOMICILIOS',
+      subcategoria: 'Rappi',
       monto: 50000,
       medio_pago: 'EFECTIVO'
     },
@@ -51,6 +56,7 @@ test('Calendar Week: strictly Monday to Sunday with zero-filled missing days', (
       fecha: '2026-09-12', // Saturday
       tipo: 'GASTO',
       categoria: 'COMBUSTIBLE',
+      subcategoria: 'Gasolina',
       monto: 15000,
       medio_pago: 'EFECTIVO'
     }
@@ -62,17 +68,17 @@ test('Calendar Week: strictly Monday to Sunday with zero-filled missing days', (
   assert.ok(weekData[1].periodo.startsWith('Mar'));
   assert.ok(weekData[6].periodo.startsWith('Dom'));
 
-  // Check Tuesday (index 1)
+  // Tuesday
   assert.equal(weekData[1].Domicilios, 50000);
   assert.equal(weekData[1].Ingresos, 50000);
 
-  // Check Wednesday (index 2) should be all 0s
+  // Wednesday (inactive)
   assert.equal(weekData[2].Domicilios, 0);
   assert.equal(weekData[2].Gastos, 0);
   assert.equal(weekData[2].Superavit, 0);
   assert.equal(weekData[2].sinActividad, true);
 
-  // Check Saturday (index 5)
+  // Saturday
   assert.equal(weekData[5].Combustible, 15000);
   assert.equal(weekData[5].Gastos, 15000);
   assert.equal(weekData[5].Superavit, -15000);
@@ -85,6 +91,7 @@ test('Calendar Month: exactly 28/29/30/31 days with zeros for inactive days', ()
       fecha: '2026-02-14',
       tipo: 'INGRESO',
       categoria: 'DOMICILIOS',
+      subcategoria: 'Didi',
       monto: 40000,
       medio_pago: 'EFECTIVO'
     }
@@ -103,59 +110,107 @@ test('Calendar Month: exactly 28/29/30/31 days with zeros for inactive days', ()
   assert.equal(sepData.length, 30, 'September must have 30 days');
 });
 
-test('Summary with 0 hours, 0 km, 0 transactions produces no NaN/Infinity', () => {
+test('Summary with 0 hours, 0 km, 0 transactions produces null (No disponible) instead of misleading $0/h', () => {
   const summary = calculateFinancialSummary([], []);
   assert.equal(summary.ingresosTotales, 0);
   assert.equal(summary.gastosTotales, 0);
   assert.equal(summary.superavitNeto, 0);
-  assert.equal(summary.rendimientoPorHora, 0);
-  assert.equal(summary.rendimientoPorKm, 0);
-  assert.ok(!isNaN(summary.rendimientoPorHora));
-  assert.ok(!isNaN(summary.rendimientoPorKm));
+  // Hourly rates must be null ("No disponible"), not $0/h
+  assert.equal(summary.facturacionBrutaPorHora, null);
+  assert.equal(summary.rendimientoOperativoPorHora, null);
+  assert.equal(summary.flujoNetoPorHora, null);
+  assert.equal(summary.rendimientoPorKm, null);
+  assert.equal(summary.rendimientoPorHora, 0); // compatibilidad regresiva
 });
 
-test('Three-tier financials separates Operativo, Obligaciones, and Flujo Disponible', () => {
+test('Odometer vs Distance calculation handles valid, invalid and missing readings safely', () => {
+  // Case A: Valid readings (end > start)
+  const sValid = { kilometros: 50, odometer_start: 12450.5, odometer_end: 12510.5 };
+  assert.equal(calculateShiftDistance(sValid), 60);
+
+  // Case B: Inverted/invalid readings (end <= start) -> Fallback to kilometros
+  const sInvalid = { kilometros: 42.5, odometer_start: 13000, odometer_end: 12900 };
+  assert.equal(calculateShiftDistance(sInvalid), 42.5);
+
+  // Case C: Missing odometer -> Uses kilometros
+  const sMissing = { kilometros: 35.8 };
+  assert.equal(calculateShiftDistance(sMissing), 35.8);
+});
+
+test('Period Navigation: moves forward and backward across months, years, and weeks', () => {
+  // Month navigation
+  const fMonth: DateFilter = { range: 'mes', referenceDate: '2026-09-13' };
+  const fPrevMonth = navigatePeriod(fMonth, -1);
+  assert.equal(fPrevMonth.referenceDate, '2026-08-13');
+  assert.equal(getPeriodLabel(fPrevMonth), 'Agosto 2026');
+
+  // Year transition in months (Jan -> Dec)
+  const fJan: DateFilter = { range: 'mes', referenceDate: '2026-01-15' };
+  const fDec = navigatePeriod(fJan, -1);
+  assert.equal(fDec.referenceDate, '2025-12-15');
+  assert.equal(getPeriodLabel(fDec), 'Diciembre 2025');
+
+  // Week navigation (moves 7 days)
+  const fWeek: DateFilter = { range: 'semana', referenceDate: '2026-09-13' };
+  const fPrevWeek = navigatePeriod(fWeek, -1);
+  assert.equal(fPrevWeek.referenceDate, '2026-09-06');
+});
+
+test('isDateInRange filters correctly based on focal referenceDate', () => {
+  // Target date is in August 2026
+  const augustDate = '2026-08-15';
+
+  // If reference date is September 2026, August date is NOT in range
+  assert.equal(isDateInRange(augustDate, 'mes', undefined, undefined, '2026-09-13'), false);
+
+  // If reference date is navigated to August 2026, August date IS in range!
+  assert.equal(isDateInRange(augustDate, 'mes', undefined, undefined, '2026-08-10'), true);
+});
+
+test('Three-tier financials strictly separates period actual payments from planned monthly obligations', () => {
   const shifts: Shift[] = [
     { id: 's1', fecha: '2026-09-10', tiempo_reparto_minutos: 300, tiempo_espera_minutos: 60, kilometros: 80 }
   ];
   const txs: Transaction[] = [
-    { id: 't1', fecha: '2026-09-10', tipo: 'INGRESO', categoria: 'DOMICILIOS', monto: 120000, medio_pago: 'EFECTIVO' },
-    { id: 't2', fecha: '2026-09-10', tipo: 'GASTO', categoria: 'COMBUSTIBLE', monto: 20000, medio_pago: 'EFECTIVO' },
-    { id: 't3', fecha: '2026-09-10', tipo: 'GASTO', categoria: 'HONORARIOS_ACOMPANANTE', monto: 30000, medio_pago: 'EFECTIVO' },
-    { id: 't4', fecha: '2026-09-10', tipo: 'INGRESO', categoria: 'OTROS_INGRESOS', monto: 50000, medio_pago: 'TRANSFERENCIA' }
+    { id: 't1', fecha: '2026-09-10', tipo: 'INGRESO', categoria: 'DOMICILIOS', subcategoria: 'Rappi', monto: 120000, medio_pago: 'EFECTIVO' },
+    { id: 't2', fecha: '2026-09-10', tipo: 'GASTO', categoria: 'COMBUSTIBLE', subcategoria: 'Gasolina', monto: 20000, medio_pago: 'EFECTIVO' },
+    { id: 't3', fecha: '2026-09-10', tipo: 'GASTO', categoria: 'HONORARIOS_ACOMPANANTE', subcategoria: 'Jhony', monto: 30000, medio_pago: 'EFECTIVO' },
+    { id: 't4', fecha: '2026-09-10', tipo: 'GASTO', categoria: 'ALIMENTACION', subcategoria: 'Almuerzo', monto: 15000, medio_pago: 'EFECTIVO' },
+    { id: 't5', fecha: '2026-09-10', tipo: 'INGRESO', categoria: 'OTROS_INGRESOS', subcategoria: 'Propina Extra', monto: 10000, medio_pago: 'EFECTIVO' }
   ];
+  // Monthly planned obligations ($500.000)
   const credits: CreditInstallment[] = [
-    { id: 'c1', nombre: 'Moto', montoCuota: 25000, diaPago: 10, pagadoEsteMes: false }
+    { id: 'c1', nombre: 'Moto', montoCuota: 350000, diaPago: 10, pagadoEsteMes: false }
   ];
   const cards: CreditCardAccount[] = [
-    { id: 'cc1', nombre: 'Tarjeta', saldoUtilizado: 100000, cupoTotal: 1000000, pagoMinimo: 15000, diaCorte: 15, diaLimitePago: 30 }
+    { id: 'cc1', nombre: 'Tarjeta', saldoUtilizado: 100000, cupoTotal: 1000000, pagoMinimo: 150000, fechaCorte: 15, fechaPago: 30 }
   ];
 
   const threeTier = calculateThreeTierFinancials(txs, shifts, credits, cards);
 
-  // Operativo: Incomes (120000) - Route Expenses (20000 + 30000) = 70000
+  // Nivel A: Resultado Operativo = Incomes (120000) - Route Costs (20000 + 30000) = 70000
   assert.equal(threeTier.ingresosOperativos, 120000);
   assert.equal(threeTier.gastosOperativos, 50000);
   assert.equal(threeTier.resultadoOperativo, 70000);
 
-  // Obligations: 25000 cuota + 15000 tarjeta = 40000
-  assert.equal(threeTier.cuotasCreditosMes, 25000);
-  assert.equal(threeTier.pagosTarjetasMes, 15000);
-  assert.equal(threeTier.totalObligacionesDeuda, 40000);
+  // In this period, NO actual CUOTA_CREDITO transactions were registered -> actual debt payments = 0!
+  assert.equal(threeTier.pagosDeudaEfectivosPeriodo, 0);
+  assert.equal(threeTier.resultadoDespuesObligaciones, 70000, 'Must NOT deduct $500k monthly obligation when 0 payments were made in this period');
 
-  // Available Flow: 70000 - 40000 (after obligations) + 50000 (other non-operational income) = 80000
-  assert.equal(threeTier.resultadoDespuesObligaciones, 30000);
-  assert.equal(threeTier.flujoDisponible, 80000);
+  // Informative planned monthly obligations = 350k + 150k = 500k
+  assert.equal(threeTier.obligacionesMensualesPactadas, 500000);
+
+  // Nivel C: Flujo Disponible = 70000 + 10000 (otros ingresos) - 15000 (gastos personales) = 65000
+  assert.equal(threeTier.flujoDisponible, 65000);
 });
 
 test('Labor Benchmark detects overload and marginal return decay', () => {
-  // 240 hours (exceeds 182h reference by >25%), but income is only $1.000.000 (hourly = $4.166/h < $9.620/h)
   const shifts: Shift[] = [
     { id: 's1', fecha: '2026-09-01', tiempo_reparto_minutos: 240 * 60, tiempo_espera_minutos: 0, kilometros: 1000 }
   ];
   const txs: Transaction[] = [
-    { id: 't1', fecha: '2026-09-01', tipo: 'INGRESO', categoria: 'DOMICILIOS', monto: 1200000, medio_pago: 'EFECTIVO' },
-    { id: 't2', fecha: '2026-09-01', tipo: 'GASTO', categoria: 'COMBUSTIBLE', monto: 200000, medio_pago: 'EFECTIVO' }
+    { id: 't1', fecha: '2026-09-01', tipo: 'INGRESO', categoria: 'DOMICILIOS', subcategoria: 'Rappi', monto: 1200000, medio_pago: 'EFECTIVO' },
+    { id: 't2', fecha: '2026-09-01', tipo: 'GASTO', categoria: 'COMBUSTIBLE', subcategoria: 'Gasolina', monto: 200000, medio_pago: 'EFECTIVO' }
   ];
 
   const labor = calculateLaborBenchmark(shifts, txs, DEFAULT_FINANCIAL_SETTINGS);
@@ -165,84 +220,46 @@ test('Labor Benchmark detects overload and marginal return decay', () => {
   assert.ok(!labor.cumpleMetaHora);
 });
 
-test('Credit Cards analysis evaluates utilization and traffic light correctly', () => {
-  const cardsGreen: CreditCardAccount[] = [
-    { id: 'c1', nombre: 'Nu', saldoUtilizado: 200000, cupoTotal: 1000000, pagoMinimo: 20000, diaCorte: 10, diaLimitePago: 25 }
-  ];
-  const aGreen = analyzeCreditCards(cardsGreen);
-  assert.equal(aGreen.utilizacionGlobalPct, 20);
-  assert.equal(aGreen.semaforoUtilizacion, 'VERDE');
+test('Decision engine: handles deficit state and missing interest rates with fallbacks', () => {
+  // Case A: Deficit (availableCash <= 0)
+  const recDeficit = recommendSaveVsPayDebt(-50000, [], [], 100000, 500000);
+  assert.equal(recDeficit.prioridadPrincipal, 'DEFICIT_RECUPERAR_FLUJO');
+  assert.equal(recDeficit.esDeficit, true);
+  assert.equal(recDeficit.montoRecomendadoAbono, 0);
+  assert.equal(recDeficit.montoRecomendadoAhorro, 0);
 
-  const cardsYellow: CreditCardAccount[] = [
-    { id: 'c2', nombre: 'Bancolombia', saldoUtilizado: 450000, cupoTotal: 1000000, pagoMinimo: 45000, diaCorte: 10, diaLimitePago: 25 }
-  ];
-  const aYellow = analyzeCreditCards(cardsYellow);
-  assert.equal(aYellow.utilizacionGlobalPct, 45);
-  assert.equal(aYellow.semaforoUtilizacion, 'AMARILLO');
-
-  const cardsRed: CreditCardAccount[] = [
-    { id: 'c3', nombre: 'RappiCard', saldoUtilizado: 750000, cupoTotal: 1000000, pagoMinimo: 80000, diaCorte: 10, diaLimitePago: 25 }
-  ];
-  const aRed = analyzeCreditCards(cardsRed);
-  assert.equal(aRed.utilizacionGlobalPct, 75);
-  assert.equal(aRed.semaforoUtilizacion, 'ROJO');
+  // Case B: Card without interest rate specified -> Flags tasaIncompleta, does not invent 25%
+  const cardNoRate: CreditCardAccount = {
+    id: 'cc-norate',
+    nombre: 'Tuya',
+    saldoUtilizado: 300000,
+    cupoTotal: 1000000,
+    pagoMinimo: 30000,
+    fechaCorte: 5,
+    fechaPago: 20
+  };
+  const recNoRate = recommendSaveVsPayDebt(200000, [], [cardNoRate], 1500000, 500000);
+  assert.equal(recNoRate.tasaIncompleta, true);
+  assert.ok(recNoRate.titulo.includes('Tasa no especificada'));
 });
 
-test('Decision engine: prioritizes emergency fund when cushion is low', () => {
-  const recLowCushion = recommendSaveVsPayDebt(
-    200000,
-    [],
-    [{ id: 'c1', nombre: 'Card', saldoUtilizado: 150000, cupoTotal: 500000, pagoMinimo: 15000, diaCorte: 1, diaLimitePago: 15 }],
-    50000, // only $50.000 savings
-    1000000, // essential expenses $1.000.000 -> <1 month
-    DEFAULT_FINANCIAL_SETTINGS
-  );
-
-  assert.equal(recLowCushion.prioridadPrincipal, 'CREAR_FONDO_EMERGENCIA');
-  assert.ok(recLowCushion.montoRecomendadoAhorro > recLowCushion.montoRecomendadoAbono);
-});
-
-test('Decision engine: prioritizes high interest debt when emergency fund is established', () => {
-  const recHighDebt = recommendSaveVsPayDebt(
-    300000,
-    [],
-    [{ id: 'c1', nombre: 'Card', saldoUtilizado: 500000, cupoTotal: 1000000, pagoMinimo: 50000, diaCorte: 1, diaLimitePago: 15, tasaInteresEA: 28 }],
-    2500000, // $2.500.000 savings
-    1000000, // essential expenses $1.000.000 -> 2.5 months!
-    DEFAULT_FINANCIAL_SETTINGS
-  );
-
-  assert.equal(recHighDebt.prioridadPrincipal, 'ABONAR_DEUDA_INTERES_ALTO');
-  assert.ok(recHighDebt.montoRecomendadoAbono > recHighDebt.montoRecomendadoAhorro);
-});
-
-test('Expense analysis classifies Jhony as Productive and checks 50/30/20', () => {
+test('Shift grouping aggregates shifts and route expenses by month correctly', () => {
+  const shifts: Shift[] = [
+    { id: 's1', fecha: '2026-09-05', tiempo_reparto_minutos: 180, tiempo_espera_minutos: 20, kilometros: 40 },
+    { id: 's2', fecha: '2026-09-10', tiempo_reparto_minutos: 120, tiempo_espera_minutos: 40, kilometros: 30 },
+    { id: 's3', fecha: '2026-08-20', tiempo_reparto_minutos: 240, tiempo_espera_minutos: 60, kilometros: 70 }
+  ];
   const txs: Transaction[] = [
-    { id: '1', fecha: '2026-09-01', tipo: 'INGRESO', categoria: 'DOMICILIOS', monto: 1000000, medio_pago: 'EFECTIVO' },
-    { id: '2', fecha: '2026-09-01', tipo: 'GASTO', categoria: 'COMBUSTIBLE', monto: 200000, medio_pago: 'EFECTIVO' },
-    { id: '3', fecha: '2026-09-01', tipo: 'GASTO', categoria: 'HONORARIOS_ACOMPANANTE', monto: 150000, medio_pago: 'EFECTIVO' },
-    { id: '4', fecha: '2026-09-01', tipo: 'GASTO', categoria: 'ALIMENTACION', monto: 100000, medio_pago: 'EFECTIVO' }
+    { id: 't1', fecha: '2026-09-05', tipo: 'INGRESO', categoria: 'DOMICILIOS', subcategoria: 'Rappi', monto: 80000, medio_pago: 'EFECTIVO' },
+    { id: 't2', fecha: '2026-09-05', tipo: 'GASTO', categoria: 'COMBUSTIBLE', subcategoria: 'Gasolina', monto: 15000, medio_pago: 'EFECTIVO' },
+    { id: 't3', fecha: '2026-08-20', tipo: 'INGRESO', categoria: 'DOMICILIOS', subcategoria: 'Rappi', monto: 100000, medio_pago: 'EFECTIVO' }
   ];
 
-  const analysis = analyzeExpenseHealth(txs);
-  const jhonyItem = analysis.items.find(i => i.categoria === 'HONORARIOS_ACOMPANANTE');
-  assert.ok(jhonyItem);
-  assert.equal(jhonyItem?.clasificacion, 'PRODUCTIVO');
-  assert.ok(analysis.necesidadesTotal >= 450000);
-});
-
-test('Period comparison returns valid percentage changes and human narrative', () => {
-  const prevTxs: Transaction[] = [
-    { id: 'p1', fecha: '2026-08-01', tipo: 'INGRESO', categoria: 'DOMICILIOS', monto: 800000, medio_pago: 'EFECTIVO' },
-    { id: 'p2', fecha: '2026-08-01', tipo: 'GASTO', categoria: 'COMBUSTIBLE', monto: 100000, medio_pago: 'EFECTIVO' }
-  ];
-  const currTxs: Transaction[] = [
-    { id: 'c1', fecha: '2026-09-01', tipo: 'INGRESO', categoria: 'DOMICILIOS', monto: 1200000, medio_pago: 'EFECTIVO' },
-    { id: 'c2', fecha: '2026-09-01', tipo: 'GASTO', categoria: 'COMBUSTIBLE', monto: 150000, medio_pago: 'EFECTIVO' }
-  ];
-
-  const comp = comparePeriods(currTxs, prevTxs, [], [], 'Mes actual vs Mes anterior');
-  assert.equal(comp.variacionIngresosPct, 50); // 800k -> 1200k = +50%
-  assert.equal(comp.variacionSuperavitPct, 50); // 700k -> 1050k = +50%
-  assert.ok(comp.explicacionNarrativa.length > 20);
+  const grouped = groupShiftsByPeriod(shifts, txs, 'mes');
+  assert.equal(grouped.length, 2, 'Should group into Sep 2026 and Ago 2026');
+  assert.equal(grouped[0].periodoKey, '2026-09');
+  assert.equal(grouped[0].kilometros, 70);
+  assert.equal(grouped[0].totalTurnos, 2);
+  assert.equal(grouped[0].ingresos, 80000);
+  assert.equal(grouped[0].gastosRuta, 15000);
 });

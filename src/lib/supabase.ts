@@ -142,7 +142,16 @@ export async function syncWithSupabase(
           // Excluir sync_status de la carga enviada a Supabase
           const { sync_status, ...payload } = item.payload;
           const { error } = await client.from('shifts').upsert(payload);
-          if (error) throw error;
+          if (error) {
+            // Si la columna de odómetro aún no existe en Supabase remoto, reintentar sin esos campos
+            if (error.code === '42703' || error.message?.includes('odometer')) {
+              const { odometer_start, odometer_end, ...fallbackShift } = payload;
+              const { error: retryErr } = await client.from('shifts').upsert(fallbackShift);
+              if (retryErr) throw retryErr;
+            } else {
+              throw error;
+            }
+          }
           syncedCount++;
         } else if (item.action === 'delete') {
           const { error } = await client.from('shifts').delete().eq('id', item.id);

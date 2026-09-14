@@ -58,7 +58,9 @@ import {
   analyzeExpenseHealth,
   analyzeCreditCards,
   recommendSaveVsPayDebt,
-  generateSmartInsights
+  generateSmartInsights,
+  navigatePeriod,
+  getLocalDateString
 } from '../lib/calculations';
 import { getSupabaseClient, syncWithSupabase } from '../lib/supabase';
 
@@ -86,7 +88,9 @@ interface AppDataContextType {
   filteredTransactions: Transaction[];
   summary: FinancialSummary;
   filter: DateFilter;
-  setFilterRange: (range: TimeRange, customStart?: string, customEnd?: string) => void;
+  setFilterRange: (range: TimeRange, customStart?: string, customEnd?: string, referenceDate?: string) => void;
+  navigateFilter: (direction: -1 | 1) => void;
+  resetFilterToToday: () => void;
   isOnline: boolean;
   isSyncing: boolean;
   lastSyncTime: string | null;
@@ -190,11 +194,20 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   });
 
   const [filter, setFilter] = useState<DateFilter>(() => {
+    const today = getLocalDateString();
     try {
-      const saved = localStorage.getItem('riderledger_filter_v2');
-      if (saved) return JSON.parse(saved);
+      const saved = localStorage.getItem('riderledger_filter_v3');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          range: parsed.range || 'mes',
+          referenceDate: parsed.referenceDate || today,
+          startDate: parsed.startDate,
+          endDate: parsed.endDate
+        };
+      }
     } catch {}
-    return { range: 'hoy' };
+    return { range: 'mes', referenceDate: today };
   });
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -350,11 +363,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Filtrado temporal
   const filteredShifts = useMemo(() => {
-    return shifts.filter(s => isDateInRange(s.fecha, filter.range, filter.startDate, filter.endDate));
+    return shifts.filter(s => isDateInRange(s.fecha, filter.range, filter.startDate, filter.endDate, filter.referenceDate));
   }, [shifts, filter]);
 
   const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => isDateInRange(t.fecha, filter.range, filter.startDate, filter.endDate));
+    return transactions.filter(t => isDateInRange(t.fecha, filter.range, filter.startDate, filter.endDate, filter.referenceDate));
   }, [transactions, filter]);
 
   const summary = useMemo(() => {
@@ -767,13 +780,39 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
   }, []);
 
-  const setFilterRange = (range: TimeRange, customStart?: string, customEnd?: string) => {
-    const newFilter: DateFilter = { range, startDate: customStart, endDate: customEnd };
-    setFilter(newFilter);
-    try {
-      localStorage.setItem('riderledger_filter_v2', JSON.stringify(newFilter));
-    } catch {}
-  };
+  const setFilterRange = useCallback((range: TimeRange, customStart?: string, customEnd?: string, referenceDate?: string) => {
+    setFilter(prev => {
+      const refDate = referenceDate || prev.referenceDate || getLocalDateString();
+      const newFilter: DateFilter = { range, referenceDate: refDate, startDate: customStart, endDate: customEnd };
+      try {
+        localStorage.setItem('riderledger_filter_v3', JSON.stringify(newFilter));
+      } catch {}
+      return newFilter;
+    });
+  }, []);
+
+  const navigateFilter = useCallback((direction: -1 | 1) => {
+    setFilter(prev => {
+      const next = navigatePeriod(prev, direction);
+      try {
+        localStorage.setItem('riderledger_filter_v3', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const resetFilterToToday = useCallback(() => {
+    setFilter(prev => {
+      const next: DateFilter = {
+        ...prev,
+        referenceDate: getLocalDateString()
+      };
+      try {
+        localStorage.setItem('riderledger_filter_v3', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
 
   const openDrawer = (tab?: 'shift' | 'app_income' | 'quick_expense' | 'other_income') => {
     if (tab) setActiveDrawerTab(tab);
@@ -841,6 +880,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         summary,
         filter,
         setFilterRange,
+        navigateFilter,
+        resetFilterToToday,
         isOnline,
         isSyncing,
         lastSyncTime,
