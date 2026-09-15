@@ -151,6 +151,42 @@ export const CreditCardsSection: React.FC = () => {
         </div>
       </div>
 
+      {/* Próximos Vencimientos Reales (Regla 7) */}
+      {creditCards.length > 0 && (
+        <div className="p-4 rounded-2xl bg-slate-900/90 border border-purple-500/20 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
+              <Calendar className="w-4 h-4 text-purple-400" />
+              Próximos Vencimientos Reales de Tarjetas
+            </span>
+            <span className="text-[11px] text-slate-400">
+              Basado en la fecha límite real de cada entidad
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-xs">
+            <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5 flex items-center justify-between">
+              <span className="text-slate-400">Próximos 7 días:</span>
+              <b className={creditCardAnalysis.vencenEn7Dias.length > 0 ? 'text-amber-400 font-black' : 'text-slate-400'}>
+                {creditCardAnalysis.vencenEn7Dias.length} {creditCardAnalysis.vencenEn7Dias.length === 1 ? 'tarjeta' : 'tarjetas'}
+              </b>
+            </div>
+            <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5 flex items-center justify-between">
+              <span className="text-slate-400">Próximos 15 días:</span>
+              <b className="text-slate-200 font-black">
+                {creditCardAnalysis.vencenEn15Dias.length} {creditCardAnalysis.vencenEn15Dias.length === 1 ? 'tarjeta' : 'tarjetas'}
+              </b>
+            </div>
+            <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5 flex items-center justify-between">
+              <span className="text-slate-400">Este mes calendario:</span>
+              <b className="text-purple-400 font-black">
+                {creditCardAnalysis.vencenEsteMes.length} {creditCardAnalysis.vencenEsteMes.length === 1 ? 'tarjeta' : 'tarjetas'}
+              </b>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Lista de Tarjetas */}
       {creditCards.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -239,7 +275,7 @@ export const CreditCardsSection: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Fechas de corte y pago */}
+                {/* Fechas de corte y pago real */}
                 <div className="pt-2 border-t border-white/5 grid grid-cols-2 gap-2 text-[11px] text-slate-300">
                   <div className="flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5 text-cyan-400" />
@@ -247,14 +283,24 @@ export const CreditCardsSection: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Límite: <b>Día {card.fechaPago}</b></span>
+                    <span>Límite real: <b>Día {card.fechaPago}</b></span>
                   </div>
                 </div>
 
-                {/* Footer con Pago Mínimo */}
-                <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs">
-                  <span className="text-slate-400 text-[11px]">Pago mínimo sugerido:</span>
-                  <b className="text-white font-black">{formatCurrency(card.pagoMinimo)}</b>
+                {/* Distinción: Pago Mínimo vs Saldo Total para No Generar Intereses (Regla 13) */}
+                <div className="pt-2 border-t border-white/5 space-y-1 text-xs">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400">Pago mínimo sugerido:</span>
+                    <b className="text-amber-300 font-black">
+                      {card.pagoMinimo > 0 ? formatCurrency(card.pagoMinimo) : 'Sin mínimo configurado'}
+                    </b>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400">Pago total (evitar intereses):</span>
+                    <b className="text-emerald-400 font-black">
+                      {formatCurrency(card.pagoTotalEsperado || card.saldoUtilizado)}
+                    </b>
+                  </div>
                 </div>
               </div>
             );

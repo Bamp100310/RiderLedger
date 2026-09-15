@@ -639,13 +639,16 @@ export function exportToCSV(reports: ConsolidatedPeriodReport[]): void {
 export function calculateCreditAnalysis(
   credits: CreditInstallment[],
   currentSurplus: number,
-  referenceDate: Date = new Date()
+  referenceDate: Date = new Date(),
+  cards: CreditCardAccount[] = []
 ): CreditAnalysis {
   const day = referenceDate.getDate();
   const year = referenceDate.getFullYear();
   const month = referenceDate.getMonth();
+  const todayOnly = new Date(year, month, day);
+  const oneDayMs = 24 * 60 * 60 * 1000;
 
-  // Determinar si el próximo corte es el día 10 o el día 30
+  // Determinar si el próximo corte quincenal es el día 10 o el día 30
   let nextDueDay: number;
   let nextDueDate: Date;
 
@@ -662,14 +665,13 @@ export function calculateCreditAnalysis(
     nextDueDate = new Date(year, month + 1, 10);
   }
 
-  const oneDayMs = 24 * 60 * 60 * 1000;
-  const todayOnly = new Date(year, month, day);
   const diffTime = nextDueDate.getTime() - todayOnly.getTime();
   const diasRestantes = Math.max(0, Math.ceil(diffTime / oneDayMs));
 
   // Filtrar cuotas aplicables para ese día de pago
   const currentMonthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
   const cuotasAplicables = credits.filter(c => {
+    if (c.deleted_at) return false;
     if (nextDueDay === 10) {
       return c.diaPago <= 15;
     } else {
@@ -678,21 +680,44 @@ export function calculateCreditAnalysis(
   });
 
   const totalCuotasPendientes = cuotasAplicables
-    .filter(c => !(c.pagadoEsteMes && c.ultimoMesPagado === currentMonthStr))
+    .filter(c => !(c.pagadoEsteMes && (!c.ultimoMesPagado || c.ultimoMesPagado === currentMonthStr)))
     .reduce((sum, c) => sum + (Number(c.montoCuota) || 0), 0);
 
+  const sinCuotasPendientes = totalCuotasPendientes === 0;
   const diferencia = currentSurplus - totalCuotasPendientes;
-  const porcentajeCobertura = totalCuotasPendientes > 0
-    ? Math.min(999, Math.round((Math.max(0, currentSurplus) / totalCuotasPendientes) * 100))
-    : 100;
+  const porcentajeCobertura = sinCuotasPendientes
+    ? 100
+    : Math.min(999, Math.round((Math.max(0, currentSurplus) / totalCuotasPendientes) * 100));
 
-  const estaCubierto = diferencia >= 0 && totalCuotasPendientes > 0;
+  // Si no hay cuotas pendientes: SIEMPRE está cubierto, sin falsos déficits
+  const estaCubierto = sinCuotasPendientes ? true : diferencia >= 0;
   const esHoy = diasRestantes === 0;
-  const alertaVencimientoCercano = diasRestantes <= 3;
+  const alertaVencimientoCercano = !sinCuotasPendientes && diasRestantes <= 3;
 
   const monthStr = String(nextDueDate.getMonth() + 1).padStart(2, '0');
   const dayStr = String(nextDueDate.getDate()).padStart(2, '0');
   const proximaFechaCompleta = `${nextDueDate.getFullYear()}-${monthStr}-${dayStr}`;
+
+  // Obligaciones de tarjetas con fechas de pago reales
+  const pagosTarjetasProximos = cards
+    .filter(c => !c.deleted_at && (Number(c.pagoMinimo) > 0 || Number(c.saldoUtilizado) > 0))
+    .map(c => {
+      const pDay = Math.min(31, Math.max(1, Number(c.fechaPago) || 15));
+      let dDate = new Date(year, month, pDay);
+      if (dDate.getTime() < todayOnly.getTime()) {
+        dDate = new Date(year, month + 1, pDay);
+      }
+      const dDays = Math.max(0, Math.ceil((dDate.getTime() - todayOnly.getTime()) / oneDayMs));
+      const mStr = String(dDate.getMonth() + 1).padStart(2, '0');
+      const dStr = String(dDate.getDate()).padStart(2, '0');
+      return {
+        tarjeta: c,
+        proximoPago: Number(c.pagoMinimo) || Number(c.saldoUtilizado) || 0,
+        fechaCompleta: `${dDate.getFullYear()}-${mStr}-${dStr}`,
+        dias: dDays
+      };
+    })
+    .sort((a, b) => a.dias - b.dias);
 
   return {
     proximoDiaPago: nextDueDay,
@@ -700,12 +725,14 @@ export function calculateCreditAnalysis(
     diasRestantes,
     totalCuotasPendientes,
     superavitActual: currentSurplus,
-    diferencia,
+    diferencia: sinCuotasPendientes ? currentSurplus : diferencia,
     porcentajeCobertura,
     estaCubierto,
     alertaVencimientoCercano,
     esHoy,
-    cuotasAplicables
+    sinCuotasPendientes,
+    cuotasAplicables,
+    pagosTarjetasProximos
   };
 }
 
@@ -914,9 +941,56 @@ export function getHistoricalMonthsFinancialData(transactions: Transaction[]): C
 export function getPeriodFinancialChartData(
   transactions: Transaction[],
   range: TimeRange,
-  historicalGranularity: 'dia' | 'semana' | 'mes' = 'dia',
-  referenceDate: Date = new Date()
+  historicalGranularityOrRefDate: 'dia' | 'semana' | 'mes' | Date = 'dia',
+  referenceDateParam: Date = new Date()
 ): CalendarPeriodBarItem[] {
+  let historicalGranularity: 'dia' | 'semana' | 'mes' = 'dia';
+  let referenceDate: Date = referenceDateParam;
+
+  if (historicalGranularityOrRefDate instanceof Date) {
+    referenceDate = historicalGranularityOrRefDate;
+  } else if (typeof historicalGranularityOrRefDate === 'string') {
+    historicalGranularity = historicalGranularityOrRefDate;
+  }
+
+  if (range === 'hoy') {
+    // DESGLOSE REAL DEL DÍA (REGLA 5)
+    const refStr = getLocalDateString(referenceDate);
+    const dayTxs = transactions.filter(t => t.fecha === refStr && !t.deleted_at);
+    const parts = refStr.split('-');
+    const label = `Hoy (${parts[2]}/${parts[1]})`;
+    const item = createEmptyCalendarPeriodBarItem(refStr, label, refStr);
+
+    if (dayTxs.length === 0) {
+      item.sinActividad = true;
+      return [item];
+    }
+
+    item.sinActividad = false;
+    for (const t of dayTxs) {
+      const monto = Number(t.monto) || 0;
+      if (t.tipo === 'INGRESO') {
+        item.Ingresos += monto;
+        if (t.categoria === 'DOMICILIOS') item.Domicilios += monto;
+        else if (t.categoria === 'PASAJEROS') item.Pasajeros += monto;
+        else item.OtrosIngresos += monto;
+      } else if (t.tipo === 'GASTO') {
+        item.Gastos += monto;
+        if (t.categoria === 'COMBUSTIBLE') item.Combustible += monto;
+        else if (
+          t.categoria === 'HONORARIOS_ACOMPANANTE' ||
+          (t.subcategoria && (t.subcategoria.toLowerCase().includes('acompañante') || t.subcategoria.toLowerCase().includes('jhony')))
+        ) item.Acompanante += monto;
+        else if (t.categoria === 'ALIMENTACION') item.Alimentacion += monto;
+        else if (t.categoria === 'MANTENIMIENTO_MOTO') item.Mantenimiento += monto;
+        else if (t.categoria === 'CUOTA_CREDITO') item.CuotaCredito += monto;
+        else item.OtrosGastos += monto;
+      }
+    }
+    item.Superavit = item.Ingresos - item.Gastos;
+    return [item];
+  }
+
   if (range === 'semana') {
     return getCalendarWeekFinancialData(transactions, referenceDate);
   }
@@ -1411,22 +1485,31 @@ export function analyzeExpenseHealth(
   }
 
   const ratioGastoIngresoPct = totalIngresos > 0 ? Math.round((totalGastos / totalIngresos) * 100) : 0;
-  // La regla 50/30/20 se evalúa sobre la base de Ingreso Total (o sobre Gastos si ingreso es 0)
-  const basePresupuesto = totalIngresos > 0 ? totalIngresos : (totalGastos > 0 ? totalGastos : 1);
+  // La regla 50/30/20 se evalúa sobre la base de Ingreso Total (referencia presupuestaria)
+  const basePresupuesto = totalIngresos;
 
-  const porcentajeNecesidadesReal = Math.round((necesidadesTotal / basePresupuesto) * 100);
-  const porcentajeDeseosReal = Math.round((deseosTotal / basePresupuesto) * 100);
-  const porcentajeAhorroDeudaReal = Math.round((ahorroDeudaTotal / basePresupuesto) * 100);
+  const porcentajeNecesidadesReal = basePresupuesto > 0 ? Math.round((necesidadesTotal / basePresupuesto) * 100) : 0;
+  const porcentajeDeseosReal = basePresupuesto > 0 ? Math.round((deseosTotal / basePresupuesto) * 100) : 0;
+  const porcentajeAhorroDeudaReal = basePresupuesto > 0 ? Math.round((ahorroDeudaTotal / basePresupuesto) * 100) : 0;
 
-  let explicacion50_30_20 = `Distribución sobre tus ingresos: ${porcentajeNecesidadesReal}% Necesidades operativas, ${porcentajeDeseosReal}% Discrecional, ${porcentajeAhorroDeudaReal}% Obligaciones. `;
-  if (porcentajeDeseosReal > (settings.porcentajeDeseosRef || 30)) {
-    explicacion50_30_20 += 'Los gastos discrecionales representan una proporción importante del ingreso con margen para optimizar.';
+  let explicacion50_30_20 = '';
+  if (basePresupuesto === 0) {
+    explicacion50_30_20 = 'Sin ingresos registrados en este período. La distribución presupuestaria 50/30/20 se evaluará una vez registres ingresos.';
   } else {
-    explicacion50_30_20 += 'Tus gastos están mayoritariamente concentrados en necesidades operativas esenciales.';
+    explicacion50_30_20 = `Distribución sobre tus ingresos: ${porcentajeNecesidadesReal}% Necesidades operativas, ${porcentajeDeseosReal}% Discrecional, ${porcentajeAhorroDeudaReal}% Obligaciones. `;
+    if (ratioGastoIngresoPct > 100) {
+      explicacion50_30_20 += 'Tus gastos superan el 100% de los ingresos de este período (déficit presupuestario).';
+    } else if (porcentajeDeseosReal > (settings.porcentajeDeseosRef || 30)) {
+      explicacion50_30_20 += 'Los gastos discrecionales representan una proporción importante del ingreso con margen para optimizar.';
+    } else {
+      explicacion50_30_20 += 'Tus gastos están mayoritariamente concentrados en necesidades operativas esenciales.';
+    }
   }
 
   let alertaGastos: string | null = null;
-  if (ratioGastoIngresoPct > 85) {
+  if (ratioGastoIngresoPct > 100) {
+    alertaGastos = 'Déficit presupuestario: Tus gastos absorben más del 100% de tus ingresos en este período. Prioriza recuperar balance operativo.';
+  } else if (ratioGastoIngresoPct > 85) {
     alertaGastos = 'Tus gastos están absorbiendo más del 85% de tus ingresos. Revisa combustible y compras discrecionales.';
   }
 
@@ -1448,7 +1531,7 @@ export function analyzeExpenseHealth(
 /**
  * Analiza el estado y salud de las tarjetas de crédito
  */
-export function analyzeCreditCards(cards: CreditCardAccount[]): CreditCardAnalysis {
+export function analyzeCreditCards(cards: CreditCardAccount[], referenceDate: Date = new Date()): CreditCardAnalysis {
   const deudaTotalTarjetas = cards.reduce((sum, c) => sum + (Number(c.saldoUtilizado) || 0), 0);
   const cupoTotalTarjetas = cards.reduce((sum, c) => sum + (Number(c.cupoTotal) || 0), 0);
   const cupoDisponibleTotal = Math.max(0, cupoTotalTarjetas - deudaTotalTarjetas);
@@ -1466,8 +1549,48 @@ export function analyzeCreditCards(cards: CreditCardAccount[]): CreditCardAnalys
 
   const advertenciaPagoMinimo = 'Pagar solo el mínimo evita la mora inmediata, pero extiende drásticamente la deuda y multiplica los intereses pagados.';
 
+  // Calcular vencimientos reales con respecto a referenceDate
+  const refDay = referenceDate.getDate();
+  const refYear = referenceDate.getFullYear();
+  const refMonth = referenceDate.getMonth();
+  const todayOnly = new Date(refYear, refMonth, refDay);
+  const oneDayMs = 24 * 60 * 60 * 1000;
+
+  const vencenEn7Dias: CreditCardAccount[] = [];
+  const vencenEn15Dias: CreditCardAccount[] = [];
+  const vencenEsteMes: CreditCardAccount[] = [];
+  let proximoVencimiento: { card: CreditCardAccount; diasRestantes: number; fechaFormateada: string } | null = null;
+  let minDays = Infinity;
+
+  for (const card of cards) {
+    if (card.deleted_at) continue;
+    if ((Number(card.saldoUtilizado) || 0) <= 0 && (Number(card.pagoMinimo) || 0) <= 0) continue;
+    const pDay = Math.min(31, Math.max(1, Number(card.fechaPago) || 15));
+    
+    let dueDate = new Date(refYear, refMonth, pDay);
+    if (dueDate.getTime() < todayOnly.getTime()) {
+      dueDate = new Date(refYear, refMonth + 1, pDay);
+    }
+
+    const diffDays = Math.ceil((dueDate.getTime() - todayOnly.getTime()) / oneDayMs);
+    if (diffDays <= 7) vencenEn7Dias.push(card);
+    if (diffDays <= 15) vencenEn15Dias.push(card);
+    if (dueDate.getMonth() === refMonth) vencenEsteMes.push(card);
+
+    if (diffDays < minDays) {
+      minDays = diffDays;
+      const mStr = String(dueDate.getMonth() + 1).padStart(2, '0');
+      const dStr = String(dueDate.getDate()).padStart(2, '0');
+      proximoVencimiento = {
+        card,
+        diasRestantes: diffDays,
+        fechaFormateada: `${dueDate.getFullYear()}-${mStr}-${dStr}`
+      };
+    }
+  }
+
   return {
-    tarjetas: cards,
+    tarjetas: cards.filter(c => !c.deleted_at),
     deudaTotalTarjetas,
     cupoTotalTarjetas,
     cupoDisponibleTotal,
@@ -1475,7 +1598,11 @@ export function analyzeCreditCards(cards: CreditCardAccount[]): CreditCardAnalys
     semaforoUtilizacion,
     pagoMinimoTotal,
     pagoCompletoTotal,
-    advertenciaPagoMinimo
+    advertenciaPagoMinimo,
+    proximoVencimiento,
+    vencenEn7Dias,
+    vencenEn15Dias,
+    vencenEsteMes
   };
 }
 

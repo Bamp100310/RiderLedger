@@ -19,6 +19,8 @@ export interface Shift {
   odometer_start?: number | null;
   odometer_end?: number | null;
   created_at?: string;
+  updated_at?: string;
+  deleted_at?: string | null;
   sync_status?: 'synced' | 'pending' | 'error';
 }
 
@@ -34,6 +36,8 @@ export interface Transaction {
   medio_pago: PaymentMethod;
   shift_id?: string | null;
   created_at?: string;
+  updated_at?: string;
+  deleted_at?: string | null;
   sync_status?: 'synced' | 'pending' | 'error';
 }
 
@@ -51,14 +55,18 @@ export interface CreditInstallment {
   userId?: string;
   nombre: string; // ej: "Cuota Moto", "Crédito Bancario"
   montoCuota: number;
-  diaPago: 10 | 30 | number; // Días 10 y 30
+  diaPago: number; // Día del mes (1..31)
   descripcion?: string;
   pagadoEsteMes?: boolean;
   ultimoMesPagado?: string; // "YYYY-MM"
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string | null;
+  sync_status?: 'synced' | 'pending' | 'error';
 }
 
 export interface CreditAnalysis {
-  proximoDiaPago: number; // 10 o 30
+  proximoDiaPago: number; // día real de pago más próximo
   proximaFechaCompleta: string; // "YYYY-MM-DD"
   diasRestantes: number;
   totalCuotasPendientes: number;
@@ -68,7 +76,9 @@ export interface CreditAnalysis {
   estaCubierto: boolean;
   alertaVencimientoCercano: boolean;
   esHoy: boolean;
+  sinCuotasPendientes: boolean;
   cuotasAplicables: CreditInstallment[];
+  pagosTarjetasProximos?: { tarjeta: CreditCardAccount; proximoPago: number; fechaCompleta: string; dias: number }[];
 }
 
 export interface FinancialSummary {
@@ -103,6 +113,7 @@ export interface UserProfile {
   rol?: string; // ej: "Repartidor Principal", "Mensajero", "Familiar"
   pin?: string;
   createdAt: string;
+  updated_at?: string;
 }
 
 export interface UserApp {
@@ -122,7 +133,7 @@ export interface SupabaseConfig {
 
 export interface SyncQueueItem {
   id: string;
-  entity: 'shifts' | 'transactions' | 'credits' | 'apps';
+  entity: 'shifts' | 'transactions' | 'credits' | 'credit_cards' | 'financial_settings' | 'apps';
   action: 'insert' | 'update' | 'delete';
   payload: any;
   timestamp: number;
@@ -150,6 +161,10 @@ export interface CreditCardAccount {
   ultimosDigitos?: string;
   notas?: string;
   estado?: 'AL_DIA' | 'EN_ALERTA' | 'SOBREGIRO';
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string | null;
+  sync_status?: 'synced' | 'pending' | 'error';
 }
 
 export interface CreditCardAnalysis {
@@ -162,9 +177,14 @@ export interface CreditCardAnalysis {
   pagoMinimoTotal: number;
   pagoCompletoTotal: number;
   advertenciaPagoMinimo: string;
+  proximoVencimiento: { card: CreditCardAccount; diasRestantes: number; fechaFormateada: string } | null;
+  vencenEn7Dias: CreditCardAccount[];
+  vencenEn15Dias: CreditCardAccount[];
+  vencenEsteMes: CreditCardAccount[];
 }
 
 export interface FinancialSettings {
+  userId?: string;
   // Salario mínimo de referencia Colombia 2026 (Decreto 1469/2025 - Decreto 159/2026)
   metaIngresoMinimoMensual: number; // Default: 1750905
   horasSemanalesReferencia: number; // Default: 42 (Ley 2101 de 2021)
@@ -177,6 +197,8 @@ export interface FinancialSettings {
   porcentajeDeseosRef: number; // Default: 30 (%)
   porcentajeAhorroDeudaRef: number; // Default: 20 (%)
   metaGastoCombustibleMaxPct: number; // Default: 25 (%)
+  updated_at?: string;
+  sync_status?: 'synced' | 'pending' | 'error';
 }
 
 export interface ThreeTierFinancials {

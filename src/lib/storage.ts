@@ -161,41 +161,54 @@ export function saveStoredTheme(theme: ThemeMode): void {
 }
 
 // ==========================================
-// CRÉDITOS Y CUOTAS (DÍAS 10 Y 30)
+// CRÉDITOS Y CUOTAS
 // ==========================================
-export function getStoredCredits(userId?: string): CreditInstallment[] {
+export function getAllStoredCredits(): CreditInstallment[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.CREDITS);
     if (raw) {
       const parsed: CreditInstallment[] = JSON.parse(raw);
-      if (userId) {
-        return parsed.filter(c => !c.userId || c.userId === userId);
-      }
-      return parsed;
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.error('Error loading all credits from localStorage', e);
+  }
+  return [];
+}
+
+export function getStoredCredits(userId?: string): CreditInstallment[] {
+  try {
+    const all = getAllStoredCredits();
+    if (all.length > 0) {
+      return all.filter(c => !c.deleted_at && (!userId || !c.userId || c.userId === userId));
     }
   } catch (e) {
     console.error('Error loading credits from localStorage', e);
   }
 
-  const uId = userId || 'user-carlos';
+  const uId = userId || 'user-alejo';
   const defaults: CreditInstallment[] = [
     {
-      id: `${uId}-cred-1`,
+      id: crypto.randomUUID(),
       userId: uId,
       nombre: 'Cuota Moto',
       montoCuota: 240000,
       diaPago: 30,
       descripcion: 'Pago quincena fin de mes (Día 30)',
-      pagadoEsteMes: false
+      pagadoEsteMes: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     },
     {
-      id: `${uId}-cred-2`,
+      id: crypto.randomUUID(),
       userId: uId,
       nombre: 'Crédito Celular',
       montoCuota: 160000,
       diaPago: 10,
       descripcion: 'Pago corte primer tercio (Día 10)',
-      pagadoEsteMes: false
+      pagadoEsteMes: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     }
   ];
   saveStoredCredits(defaults);
@@ -209,22 +222,36 @@ export function saveStoredCredits(credits: CreditInstallment[]): void {
 // ==========================================
 // TARJETAS DE CRÉDITO Y CUENTAS REVOLVENTES
 // ==========================================
-export function getStoredCreditCards(userId?: string): CreditCardAccount[] {
+export function getAllStoredCreditCards(): CreditCardAccount[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.CREDIT_CARDS);
     if (raw) {
       const parsed: CreditCardAccount[] = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        if (userId) {
-          return parsed.filter(c => !c.userId || c.userId === userId);
+        // Migración automática de IDs legados 'cc-timestamp' a UUID estándar
+        let changed = false;
+        const normalized = parsed.map(c => {
+          if (c.id && c.id.startsWith('cc-')) {
+            changed = true;
+            return { ...c, id: crypto.randomUUID() };
+          }
+          return c;
+        });
+        if (changed) {
+          saveStoredCreditCards(normalized);
         }
-        return parsed;
+        return normalized;
       }
     }
   } catch (e) {
     console.error('Error loading credit cards from storage', e);
   }
   return [];
+}
+
+export function getStoredCreditCards(userId?: string): CreditCardAccount[] {
+  const all = getAllStoredCreditCards();
+  return all.filter(c => !c.deleted_at && (!userId || !c.userId || c.userId === userId));
 }
 
 export function saveStoredCreditCards(cards: CreditCardAccount[]): void {
@@ -234,21 +261,47 @@ export function saveStoredCreditCards(cards: CreditCardAccount[]): void {
 // ==========================================
 // METAS Y REFERENCIAS FINANCIERAS
 // ==========================================
-export function getStoredFinancialSettings(): FinancialSettings {
+export function getStoredFinancialSettings(userId?: string): FinancialSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.FINANCIAL_SETTINGS);
     if (raw) {
       const parsed = JSON.parse(raw);
-      return { ...DEFAULT_FINANCIAL_SETTINGS, ...parsed };
+      if (userId && parsed[userId]) {
+        return { ...DEFAULT_FINANCIAL_SETTINGS, userId, ...parsed[userId] };
+      } else if (parsed.metaIngresoMinimoMensual !== undefined) {
+        return { ...DEFAULT_FINANCIAL_SETTINGS, ...parsed };
+      }
     }
   } catch (e) {
     console.error('Error loading financial settings from storage', e);
   }
-  return { ...DEFAULT_FINANCIAL_SETTINGS };
+  return { ...DEFAULT_FINANCIAL_SETTINGS, userId };
 }
 
-export function saveStoredFinancialSettings(settings: FinancialSettings): void {
-  localStorage.setItem(STORAGE_KEYS.FINANCIAL_SETTINGS, JSON.stringify(settings));
+export function saveStoredFinancialSettings(settings: FinancialSettings, userId?: string): void {
+  try {
+    const targetUserId = userId || settings.userId;
+    let storedMap: Record<string, any> = {};
+    const raw = localStorage.getItem(STORAGE_KEYS.FINANCIAL_SETTINGS);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') storedMap = parsed;
+      } catch {}
+    }
+
+    if (targetUserId) {
+      storedMap[targetUserId] = { ...settings, userId: targetUserId, updated_at: new Date().toISOString() };
+      localStorage.setItem(STORAGE_KEYS.FINANCIAL_SETTINGS, JSON.stringify(storedMap));
+    } else {
+      localStorage.setItem(STORAGE_KEYS.FINANCIAL_SETTINGS, JSON.stringify({
+        ...settings,
+        updated_at: new Date().toISOString()
+      }));
+    }
+  } catch (e) {
+    console.error('Error saving financial settings', e);
+  }
 }
 
 
@@ -281,40 +334,44 @@ export function saveStoredSupabaseConfig(config: SupabaseConfig): void {
 // ==========================================
 // TURNOS Y TRANSACCIONES
 // ==========================================
-export function getStoredShifts(userId?: string): Shift[] {
+export function getAllStoredShifts(): Shift[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.SHIFTS);
     if (raw) {
       const parsed: Shift[] = JSON.parse(raw);
-      if (userId) {
-        return parsed.filter(s => !s.userId || s.userId === userId);
-      }
-      return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {
-    console.error('Error loading shifts', e);
+    console.error('Error loading all shifts', e);
   }
   return [];
+}
+
+export function getStoredShifts(userId?: string): Shift[] {
+  const all = getAllStoredShifts();
+  return all.filter(s => !s.deleted_at && (!userId || !s.userId || s.userId === userId));
 }
 
 export function saveStoredShifts(shifts: Shift[]): void {
   localStorage.setItem(STORAGE_KEYS.SHIFTS, JSON.stringify(shifts));
 }
 
-export function getStoredTransactions(userId?: string): Transaction[] {
+export function getAllStoredTransactions(): Transaction[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
     if (raw) {
       const parsed: Transaction[] = JSON.parse(raw);
-      if (userId) {
-        return parsed.filter(t => !t.userId || t.userId === userId);
-      }
-      return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {
-    console.error('Error loading transactions', e);
+    console.error('Error loading all transactions', e);
   }
   return [];
+}
+
+export function getStoredTransactions(userId?: string): Transaction[] {
+  const all = getAllStoredTransactions();
+  return all.filter(t => !t.deleted_at && (!userId || !t.userId || t.userId === userId));
 }
 
 export function saveStoredTransactions(transactions: Transaction[]): void {
@@ -342,7 +399,7 @@ export function addToSyncQueue(item: Omit<SyncQueueItem, 'timestamp'>): void {
   saveStoredSyncQueue(filtered);
 }
 
-export function removeFromSyncQueue(id: string, entity: 'shifts' | 'transactions' | 'credits' | 'apps'): void {
+export function removeFromSyncQueue(id: string, entity: 'shifts' | 'transactions' | 'credits' | 'credit_cards' | 'financial_settings' | 'apps'): void {
   const queue = getStoredSyncQueue();
   const filtered = queue.filter(q => !(q.id === id && q.entity === entity));
   saveStoredSyncQueue(filtered);

@@ -58,6 +58,13 @@ export const ReportsView: React.FC = () => {
     return [...reports].reverse();
   }, [reports]);
 
+  const dataSignature = useMemo(() => {
+    const txLen = transactions.length;
+    const sum = transactions.reduce((acc, t) => acc + (Number(t.monto) || 0), 0);
+    const shLen = shifts.length;
+    return `${groupBy}_${txLen}_${sum}_${shLen}`;
+  }, [transactions, shifts, groupBy]);
+
   const totals = useMemo(() => {
     return reports.reduce(
       (acc, r) => ({
@@ -325,7 +332,7 @@ export const ReportsView: React.FC = () => {
               {chronologicalReports.length > 0 ? (
                 <div className="h-72 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chronologicalReports} barGap={4} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                    <BarChart key={`rep-bar-${dataSignature}`} data={chronologicalReports} barGap={4} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} vertical={false} />
                       <XAxis
                         dataKey="periodo"
@@ -341,9 +348,9 @@ export const ReportsView: React.FC = () => {
                       />
                       <Tooltip content={<CustomTooltip />} />
                       <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
-                      <Bar dataKey="totalIngresos" name="Ingresos" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={32} />
-                      <Bar dataKey="totalGastos" name="Gastos" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={32} />
-                      <Bar dataKey="superavit" name="Superávit" fill="#06b6d4" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                      <Bar dataKey="totalIngresos" name="Ingresos" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={32} isAnimationActive={false} />
+                      <Bar dataKey="totalGastos" name="Gastos" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={32} isAnimationActive={false} />
+                      <Bar dataKey="superavit" name="Superávit" fill="#06b6d4" radius={[4, 4, 0, 0]} maxBarSize={32} isAnimationActive={false} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -370,7 +377,7 @@ export const ReportsView: React.FC = () => {
                 <>
                   <div className="h-48 w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
+                      <PieChart key={`rep-pie-${dataSignature}`}>
                         <Pie
                           data={expenseBreakdown}
                           cx="50%"
@@ -379,6 +386,7 @@ export const ReportsView: React.FC = () => {
                           outerRadius={75}
                           paddingAngle={3}
                           dataKey="value"
+                          isAnimationActive={false}
                         >
                           {expenseBreakdown.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.color} />
@@ -432,7 +440,7 @@ export const ReportsView: React.FC = () => {
             {chronologicalReports.length > 0 ? (
               <div className="h-60 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chronologicalReports} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                  <AreaChart key={`rep-area-${dataSignature}`} data={chronologicalReports} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorRendimiento" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4} />
@@ -472,6 +480,7 @@ export const ReportsView: React.FC = () => {
                       fill="url(#colorRendimiento)"
                       dot={{ r: 5, fill: '#06b6d4', stroke: '#ffffff', strokeWidth: 2 }}
                       activeDot={{ r: 7 }}
+                      isAnimationActive={false}
                     />
                   </AreaChart>
                 </ResponsiveContainer>

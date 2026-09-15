@@ -3,7 +3,9 @@ import { useAppData } from '../../context/AppDataContext';
 import {
   formatCurrency,
   formatCurrencyCompact,
-  getPeriodFinancialChartData
+  getPeriodFinancialChartData,
+  parseLocalDate,
+  getLocalDateString
 } from '../../lib/calculations';
 import {
   ResponsiveContainer,
@@ -18,7 +20,7 @@ import {
   Cell,
   CartesianGrid
 } from 'recharts';
-import { BarChart3, PieChart as PieIcon, Layers, Calendar } from 'lucide-react';
+import { BarChart3, PieChart as PieIcon, Layers, Calendar, Activity } from 'lucide-react';
 
 const EXPENSE_COLORS: Record<string, string> = {
   'Gasolina': '#f59e0b',
@@ -37,10 +39,23 @@ export const ChartsSection: React.FC = () => {
   const [activeChartTab, setActiveChartTab] = useState<'comparativo' | 'apilado' | 'gastos' | 'ingresos'>('comparativo');
   const [historicalGranularity, setHistoricalGranularity] = useState<'dia' | 'semana' | 'mes'>('mes');
 
-  // Obtener datos del período estricto sin recortes artificiales (slice -10 eliminado)
+  // Obtener datos del período estricto utilizando la fecha focal referenceDate
   const chartData = useMemo(() => {
-    return getPeriodFinancialChartData(filteredTransactions, filter.range, historicalGranularity);
-  }, [filteredTransactions, filter.range, historicalGranularity]);
+    const refDate = parseLocalDate(filter.referenceDate || getLocalDateString());
+    return getPeriodFinancialChartData(filteredTransactions, filter.range, historicalGranularity, refDate);
+  }, [filteredTransactions, filter.range, filter.referenceDate, historicalGranularity]);
+
+  const hasActivity = useMemo(() => {
+    return chartData.some(d => !d.sinActividad && (d.Ingresos > 0 || d.Gastos > 0));
+  }, [chartData]);
+
+  // Firma reactiva para forzar a Recharts a repintar el SVG sin conservar geometrías previas en caché
+  const dataSignature = useMemo(() => {
+    const txLen = filteredTransactions.length;
+    const sum = filteredTransactions.reduce((acc, t) => acc + (Number(t.monto) || 0), 0);
+    const lastTime = filteredTransactions[0]?.created_at || '';
+    return `${filter.range}_${filter.referenceDate}_${txLen}_${sum}_${lastTime}`;
+  }, [filteredTransactions, filter.range, filter.referenceDate]);
 
   // Donut: Distribución de Gastos
   const expensePieData = useMemo(() => {
@@ -135,6 +150,10 @@ export const ChartsSection: React.FC = () => {
             <BarChart3 className="w-4 h-4 text-emerald-400" />
             Evolución y Rendimiento Visual
           </h3>
+          <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            En vivo
+          </span>
           {filter.range === 'semana' && (
             <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-bold">
               Lun → Dom
@@ -233,9 +252,9 @@ export const ChartsSection: React.FC = () => {
       {/* 1. Gráfico de Barras Comparativo (Ingresos vs Gastos) */}
       {activeChartTab === 'comparativo' && (
         <div className="h-64 w-full">
-          {chartData.length > 0 ? (
+          {hasActivity ? (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 10, right: 5, left: -15, bottom: 0 }}>
+              <BarChart key={`bar-comp-${dataSignature}`} data={chartData} margin={{ top: 10, right: 5, left: -15, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} />
                 <XAxis dataKey="periodo" stroke="#64748b" fontSize={11} tickLine={false} />
                 <YAxis
@@ -252,13 +271,15 @@ export const ChartsSection: React.FC = () => {
                   iconType="circle"
                   wrapperStyle={{ fontSize: '11px', paddingBottom: '10px' }}
                 />
-                <Bar dataKey="Ingresos" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={30} />
-                <Bar dataKey="Gastos" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={30} />
+                <Bar dataKey="Ingresos" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={30} isAnimationActive={false} />
+                <Bar dataKey="Gastos" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={30} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-full flex items-center justify-center text-xs text-slate-500">
-              Sin datos para este rango
+            <div className="h-full flex flex-col items-center justify-center text-xs text-slate-500 gap-1.5 p-6 text-center">
+              <BarChart3 className="w-8 h-8 text-slate-600 stroke-1" />
+              <p className="font-semibold text-slate-400">Sin movimientos financieros en este período</p>
+              <p className="text-[11px] text-slate-500">Registra tus entregas, viajes o gastos de ruta para visualizar el comparativo.</p>
             </div>
           )}
         </div>
@@ -267,9 +288,9 @@ export const ChartsSection: React.FC = () => {
       {/* 2. Gráfico Apilado por Categorías Reales */}
       {activeChartTab === 'apilado' && (
         <div className="h-64 w-full">
-          {chartData.length > 0 ? (
+          {hasActivity ? (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 10, right: 5, left: -15, bottom: 0 }}>
+              <BarChart key={`bar-stack-${dataSignature}`} data={chartData} margin={{ top: 10, right: 5, left: -15, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} />
                 <XAxis dataKey="periodo" stroke="#64748b" fontSize={11} tickLine={false} />
                 <YAxis
@@ -287,22 +308,24 @@ export const ChartsSection: React.FC = () => {
                   wrapperStyle={{ fontSize: '10px', paddingBottom: '10px' }}
                 />
                 {/* Ingresos Apilados */}
-                <Bar dataKey="Domicilios" stackId="ingresos" fill="#10b981" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="Pasajeros" stackId="ingresos" fill="#06b6d4" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="OtrosIngresos" stackId="ingresos" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Domicilios" stackId="ingresos" fill="#10b981" radius={[0, 0, 0, 0]} isAnimationActive={false} />
+                <Bar dataKey="Pasajeros" stackId="ingresos" fill="#06b6d4" radius={[0, 0, 0, 0]} isAnimationActive={false} />
+                <Bar dataKey="OtrosIngresos" stackId="ingresos" fill="#3b82f6" radius={[4, 4, 0, 0]} isAnimationActive={false} />
 
                 {/* Gastos Apilados */}
-                <Bar dataKey="Combustible" stackId="gastos" fill="#f59e0b" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="Acompanante" stackId="gastos" fill="#6366f1" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="Alimentacion" stackId="gastos" fill="#ec4899" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="Mantenimiento" stackId="gastos" fill="#8b5cf6" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="CuotaCredito" stackId="gastos" fill="#0ea5e9" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="OtrosGastos" stackId="gastos" fill="#64748b" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Combustible" stackId="gastos" fill="#f59e0b" radius={[0, 0, 0, 0]} isAnimationActive={false} />
+                <Bar dataKey="Acompanante" stackId="gastos" fill="#6366f1" radius={[0, 0, 0, 0]} isAnimationActive={false} />
+                <Bar dataKey="Alimentacion" stackId="gastos" fill="#ec4899" radius={[0, 0, 0, 0]} isAnimationActive={false} />
+                <Bar dataKey="Mantenimiento" stackId="gastos" fill="#8b5cf6" radius={[0, 0, 0, 0]} isAnimationActive={false} />
+                <Bar dataKey="CuotaCredito" stackId="gastos" fill="#0ea5e9" radius={[0, 0, 0, 0]} isAnimationActive={false} />
+                <Bar dataKey="OtrosGastos" stackId="gastos" fill="#64748b" radius={[4, 4, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-full flex items-center justify-center text-xs text-slate-500">
-              Sin datos para este rango
+            <div className="h-full flex flex-col items-center justify-center text-xs text-slate-500 gap-1.5 p-6 text-center">
+              <Layers className="w-8 h-8 text-slate-600 stroke-1" />
+              <p className="font-semibold text-slate-400">Sin desglose apilado para este período</p>
+              <p className="text-[11px] text-slate-500">Agrega movimientos en el turno para ver las categorías apiladas.</p>
             </div>
           )}
         </div>
@@ -315,7 +338,7 @@ export const ChartsSection: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-center justify-center h-full gap-4">
               <div className="w-44 h-44">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
+                  <PieChart key={`pie-exp-${dataSignature}`}>
                     <Pie
                       data={expensePieData}
                       dataKey="value"
@@ -325,6 +348,7 @@ export const ChartsSection: React.FC = () => {
                       innerRadius={45}
                       outerRadius={70}
                       paddingAngle={4}
+                      isAnimationActive={false}
                     >
                       {expensePieData.map((entry, index) => (
                         <Cell
@@ -365,7 +389,7 @@ export const ChartsSection: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-center justify-center h-full gap-4">
               <div className="w-44 h-44">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
+                  <PieChart key={`pie-inc-${dataSignature}`}>
                     <Pie
                       data={incomePieData}
                       dataKey="value"
@@ -375,6 +399,7 @@ export const ChartsSection: React.FC = () => {
                       innerRadius={45}
                       outerRadius={70}
                       paddingAngle={4}
+                      isAnimationActive={false}
                     >
                       {incomePieData.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={PIE_PALETTE[index % PIE_PALETTE.length]} />

@@ -22,8 +22,10 @@ import {
 } from '../types';
 import {
   getStoredShifts,
+  getAllStoredShifts,
   saveStoredShifts,
   getStoredTransactions,
+  getAllStoredTransactions,
   saveStoredTransactions,
   getStoredSupabaseConfig,
   saveStoredSupabaseConfig,
@@ -34,8 +36,10 @@ import {
   saveStoredLastSync,
   generateDemoData,
   getStoredCredits,
+  getAllStoredCredits,
   saveStoredCredits,
   getStoredCreditCards,
+  getAllStoredCreditCards,
   saveStoredCreditCards,
   getStoredFinancialSettings,
   saveStoredFinancialSettings,
@@ -60,9 +64,19 @@ import {
   recommendSaveVsPayDebt,
   generateSmartInsights,
   navigatePeriod,
-  getLocalDateString
+  getLocalDateString,
+  parseLocalDate
 } from '../lib/calculations';
-import { getSupabaseClient, syncWithSupabase } from '../lib/supabase';
+import {
+  getSupabaseClient,
+  syncWithSupabase,
+  mapCreditToRemote,
+  mapRemoteToCredit,
+  mapCardToRemote,
+  mapRemoteToCard,
+  mapSettingsToRemote,
+  mapRemoteToSettings
+} from '../lib/supabase';
 
 interface AppDataContextType {
   // Usuario Activo y Familia
@@ -146,6 +160,53 @@ interface AppDataContextType {
   setTheme: (mode: ThemeMode) => void;
 }
 
+// Normalizadores robustos para eventos Realtime de PostgreSQL / Supabase
+function normalizeRealtimeTransaction(raw: any): Transaction {
+  return {
+    id: String(raw.id),
+    userId: raw.userId || raw.user_id || raw.userid,
+    fecha: String(raw.fecha || ''),
+    tipo: raw.tipo,
+    categoria: raw.categoria,
+    subcategoria: raw.subcategoria || '',
+    descripcion: raw.descripcion || null,
+    monto: Number(raw.monto) || 0,
+    medio_pago: raw.medio_pago,
+    shift_id: raw.shift_id || null,
+    created_at: raw.created_at || new Date().toISOString(),
+    updated_at: raw.updated_at || new Date().toISOString(),
+    deleted_at: raw.deleted_at || null,
+    sync_status: 'synced'
+  };
+}
+
+function normalizeRealtimeShift(raw: any): Shift {
+  return {
+    id: String(raw.id),
+    userId: raw.userId || raw.user_id || raw.userid,
+    fecha: String(raw.fecha || ''),
+    tiempo_reparto_minutos: Number(raw.tiempo_reparto_minutos) || 0,
+    tiempo_espera_minutos: Number(raw.tiempo_espera_minutos) || 0,
+    kilometros: Number(raw.kilometros) || 0,
+    odometer_start: raw.odometer_start != null ? Number(raw.odometer_start) : null,
+    odometer_end: raw.odometer_end != null ? Number(raw.odometer_end) : null,
+    created_at: raw.created_at || new Date().toISOString(),
+    updated_at: raw.updated_at || new Date().toISOString(),
+    deleted_at: raw.deleted_at || null,
+    sync_status: 'synced'
+  };
+}
+
+function broadcastSyncEvent(type: string, payload: any) {
+  try {
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      const channel = new BroadcastChannel('riderledger_sync_channel');
+      channel.postMessage({ type, payload });
+      channel.close();
+    }
+  } catch {}
+}
+
 const AppDataContext = createContext<AppDataContextType | undefined>(undefined);
 
 export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -154,9 +215,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [activeUser, setActiveUserState] = useState<UserProfile>(() => getActiveUser());
 
   // 2. Apps del usuario
-  const [allApps, setAllApps] = useState<UserApp[]>(() => {
-    return getStoredUserApps(activeUser.id);
-  });
+  const [allApps, setAllApps] = useState<UserApp[]>(() => getStoredUserApps(activeUser.id));
 
   // 3. Tema Claro/Oscuro
   const [theme, setThemeState] = useState<ThemeMode>(() => {
@@ -172,25 +231,25 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return saved;
   });
 
-  // 4. Datos financieros (todos los registros en localStorage)
+  // 3. Estado local de turnos y transacciones (reactivo e instantáneo)
   const [allShifts, setAllShifts] = useState<Shift[]>(() => {
-    return getStoredShifts();
+    return getAllStoredShifts();
   });
 
   const [allTransactions, setAllTransactions] = useState<Transaction[]>(() => {
-    return getStoredTransactions();
+    return getAllStoredTransactions();
   });
 
   const [allCredits, setAllCredits] = useState<CreditInstallment[]>(() => {
-    return getStoredCredits(activeUser.id);
+    return getAllStoredCredits();
   });
 
   const [allCreditCards, setAllCreditCards] = useState<CreditCardAccount[]>(() => {
-    return getStoredCreditCards();
+    return getAllStoredCreditCards();
   });
 
   const [financialSettings, setFinancialSettingsState] = useState<FinancialSettings>(() => {
-    return getStoredFinancialSettings();
+    return getStoredFinancialSettings(activeUser.id);
   });
 
   const [filter, setFilter] = useState<DateFilter>(() => {
@@ -201,7 +260,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const parsed = JSON.parse(saved);
         return {
           range: parsed.range || 'mes',
-          referenceDate: parsed.referenceDate || today,
+          referenceDate: parsed.range === 'hoy' ? today : (parsed.referenceDate || today),
           startDate: parsed.startDate,
           endDate: parsed.endDate
         };
@@ -241,6 +300,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // Recargar apps del usuario
       const uApps = getStoredUserApps(found.id);
       setAllApps(uApps);
+      // Recargar configuración financiera aislada del usuario
+      const uSettings = getStoredFinancialSettings(found.id);
+      setFinancialSettingsState(uSettings);
     }
   }, [users]);
 
@@ -344,21 +406,21 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     saveStoredUserApps(updated);
   };
 
-  // Filtrar registros estrictamente del usuario activo
+  // Filtrar registros estrictamente del usuario activo (excluyendo soft-deletes)
   const shifts = useMemo(() => {
-    return allShifts.filter(s => !s.userId || s.userId === activeUser.id);
+    return allShifts.filter(s => !s.deleted_at && (!s.userId || s.userId === activeUser.id));
   }, [allShifts, activeUser.id]);
 
   const transactions = useMemo(() => {
-    return allTransactions.filter(t => !t.userId || t.userId === activeUser.id);
+    return allTransactions.filter(t => !t.deleted_at && (!t.userId || t.userId === activeUser.id));
   }, [allTransactions, activeUser.id]);
 
   const credits = useMemo(() => {
-    return allCredits.filter(c => !c.userId || c.userId === activeUser.id);
+    return allCredits.filter(c => !c.deleted_at && (!c.userId || c.userId === activeUser.id));
   }, [allCredits, activeUser.id]);
 
   const creditCards = useMemo(() => {
-    return allCreditCards.filter(c => !c.userId || c.userId === activeUser.id);
+    return allCreditCards.filter(c => !c.deleted_at && (!c.userId || c.userId === activeUser.id));
   }, [allCreditCards, activeUser.id]);
 
   // Filtrado temporal
@@ -375,8 +437,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [filteredShifts, filteredTransactions]);
 
   const creditAnalysis = useMemo(() => {
-    return calculateCreditAnalysis(credits, summary.superavitNeto);
-  }, [credits, summary.superavitNeto]);
+    const refDate = parseLocalDate(filter.referenceDate || getLocalDateString());
+    return calculateCreditAnalysis(credits, summary.superavitNeto, refDate, creditCards);
+  }, [credits, summary.superavitNeto, filter.referenceDate, creditCards]);
 
   // Motores analíticos del Copiloto Financiero
   const threeTierFinancials = useMemo(() => {
@@ -384,8 +447,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [filteredTransactions, filteredShifts, credits, creditCards]);
 
   const creditCardAnalysis = useMemo(() => {
-    return analyzeCreditCards(creditCards);
-  }, [creditCards]);
+    const refDate = parseLocalDate(filter.referenceDate || getLocalDateString());
+    return analyzeCreditCards(creditCards, refDate);
+  }, [creditCards, filter.referenceDate]);
 
   const laborBenchmark = useMemo(() => {
     return calculateLaborBenchmark(filteredShifts, filteredTransactions, financialSettings);
@@ -429,6 +493,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   React.useEffect(() => { allShiftsRef.current = allShifts; }, [allShifts]);
   React.useEffect(() => { allTransactionsRef.current = allTransactions; }, [allTransactions]);
   React.useEffect(() => { usersRef.current = users; }, [users]);
+  const allCreditsRef = React.useRef(allCredits);
+  const allCreditCardsRef = React.useRef(allCreditCards);
+  const settingsRef = React.useRef(financialSettings);
+  React.useEffect(() => { allCreditsRef.current = allCredits; }, [allCredits]);
+  React.useEffect(() => { allCreditCardsRef.current = allCreditCards; }, [allCreditCards]);
+  React.useEffect(() => { settingsRef.current = financialSettings; }, [financialSettings]);
 
   // Flag para evitar que el sync sobreescriba cambios locales recientes
   const lastLocalChangeRef = React.useRef<number>(0);
@@ -445,14 +515,33 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSyncErrorMessage(null);
 
     try {
-      const result = await syncWithSupabase(allShiftsRef.current, allTransactionsRef.current, usersRef.current);
+      const result = await syncWithSupabase(
+        allShiftsRef.current,
+        allTransactionsRef.current,
+        usersRef.current,
+        allCreditsRef.current,
+        allCreditCardsRef.current,
+        settingsRef.current,
+        activeUser.id
+      );
       if (result.success) {
-        // Solo actualizar si no hubo cambios locales durante la sincronización
         if (Date.now() - lastLocalChangeRef.current >= SYNC_GRACE_PERIOD_MS) {
           setAllShifts(result.shifts);
           saveStoredShifts(result.shifts);
           setAllTransactions(result.transactions);
           saveStoredTransactions(result.transactions);
+          if (result.credits) {
+            setAllCredits(result.credits);
+            saveStoredCredits(result.credits);
+          }
+          if (result.creditCards) {
+            setAllCreditCards(result.creditCards);
+            saveStoredCreditCards(result.creditCards);
+          }
+          if (result.financialSettings) {
+            setFinancialSettingsState(result.financialSettings);
+            saveStoredFinancialSettings(result.financialSettings, activeUser.id);
+          }
           if (result.users && result.users.length > 0) {
             setUsers(result.users);
             saveStoredUsers(result.users);
@@ -485,77 +574,194 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, []);
 
+  // Sincronización instantánea entre pestañas abiertas en el mismo navegador (0ms)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('BroadcastChannel' in window)) return;
+    const channel = new BroadcastChannel('riderledger_sync_channel');
+    channel.onmessage = (event) => {
+      const { type, payload } = event.data || {};
+      if (type === 'TRANSACTIONS_CHANGED' && Array.isArray(payload)) {
+        setAllTransactions(payload);
+      } else if (type === 'SHIFTS_CHANGED' && Array.isArray(payload)) {
+        setAllShifts(payload);
+      } else if (type === 'CREDITS_CHANGED' && Array.isArray(payload)) {
+        setAllCredits(payload);
+      } else if (type === 'CREDIT_CARDS_CHANGED' && Array.isArray(payload)) {
+        setAllCreditCards(payload);
+      } else if (type === 'SETTINGS_CHANGED' && payload) {
+        setFinancialSettingsState(payload);
+      }
+    };
+    return () => {
+      channel.close();
+    };
+  }, []);
+
   // Supabase Realtime: Recibir cambios de otros dispositivos al instante por WebSockets
   useEffect(() => {
     const client = getSupabaseClient();
     if (!client) return;
 
+    const channelName = 'riderledger_realtime_global';
     const channel = client
-      .channel('app_realtime_sync')
+      .channel(channelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, (payload) => {
-        if (payload.eventType === 'INSERT' && payload.new) {
-          const newRow = { ...payload.new, sync_status: 'synced' } as Transaction;
+        if ((payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') && payload.new) {
+          const newRow = normalizeRealtimeTransaction(payload.new);
+          if (newRow.deleted_at) {
+            setAllTransactions(prev => {
+              const updated = prev.filter(t => t.id !== newRow.id);
+              saveStoredTransactions(updated);
+              broadcastSyncEvent('TRANSACTIONS_CHANGED', updated);
+              return updated;
+            });
+            return;
+          }
           setAllTransactions(prev => {
-            if (prev.some(t => t.id === newRow.id)) {
-              return prev.map(t => t.id === newRow.id ? newRow : t);
-            }
-            const updated = [newRow, ...prev];
+            const exists = prev.some(t => t.id === newRow.id);
+            const updated = exists
+              ? prev.map(t => t.id === newRow.id ? newRow : t)
+              : [newRow, ...prev];
             saveStoredTransactions(updated);
+            broadcastSyncEvent('TRANSACTIONS_CHANGED', updated);
             return updated;
           });
-        } else if (payload.eventType === 'UPDATE' && payload.new) {
-          const updatedRow = { ...payload.new, sync_status: 'synced' } as Transaction;
-          setAllTransactions(prev => {
-            const updated = prev.map(t => t.id === updatedRow.id ? updatedRow : t);
-            saveStoredTransactions(updated);
-            return updated;
-          });
-        } else if (payload.eventType === 'DELETE' && payload.old) {
-          const deletedId = (payload.old as any)?.id;
+        } else if (payload.eventType === 'DELETE') {
+          const deletedId = (payload.old as any)?.id || (payload.new as any)?.id;
           if (deletedId) {
             setAllTransactions(prev => {
               const updated = prev.filter(t => t.id !== deletedId);
               saveStoredTransactions(updated);
+              broadcastSyncEvent('TRANSACTIONS_CHANGED', updated);
               return updated;
             });
           }
         }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, (payload) => {
-        if (payload.eventType === 'INSERT' && payload.new) {
-          const newRow = { ...payload.new, sync_status: 'synced' } as Shift;
+        if ((payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') && payload.new) {
+          const newRow = normalizeRealtimeShift(payload.new);
+          if (newRow.deleted_at) {
+            setAllShifts(prev => {
+              const updated = prev.filter(s => s.id !== newRow.id);
+              saveStoredShifts(updated);
+              broadcastSyncEvent('SHIFTS_CHANGED', updated);
+              return updated;
+            });
+            return;
+          }
           setAllShifts(prev => {
-            if (prev.some(s => s.id === newRow.id)) {
-              return prev.map(s => s.id === newRow.id ? newRow : s);
-            }
-            const updated = [newRow, ...prev];
+            const exists = prev.some(s => s.id === newRow.id);
+            const updated = exists
+              ? prev.map(s => s.id === newRow.id ? newRow : s)
+              : [newRow, ...prev];
             saveStoredShifts(updated);
+            broadcastSyncEvent('SHIFTS_CHANGED', updated);
             return updated;
           });
-        } else if (payload.eventType === 'UPDATE' && payload.new) {
-          const updatedRow = { ...payload.new, sync_status: 'synced' } as Shift;
-          setAllShifts(prev => {
-            const updated = prev.map(s => s.id === updatedRow.id ? updatedRow : s);
-            saveStoredShifts(updated);
-            return updated;
-          });
-        } else if (payload.eventType === 'DELETE' && payload.old) {
-          const deletedId = (payload.old as any)?.id;
+        } else if (payload.eventType === 'DELETE') {
+          const deletedId = (payload.old as any)?.id || (payload.new as any)?.id;
           if (deletedId) {
             setAllShifts(prev => {
               const updated = prev.filter(s => s.id !== deletedId);
               saveStoredShifts(updated);
+              broadcastSyncEvent('SHIFTS_CHANGED', updated);
               return updated;
             });
           }
         }
       })
-      .subscribe();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'credits' }, (payload) => {
+        if ((payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') && payload.new) {
+          const newCredit = mapRemoteToCredit(payload.new);
+          if (newCredit.deleted_at) {
+            setAllCredits(prev => {
+              const updated = prev.filter(c => c.id !== newCredit.id);
+              saveStoredCredits(updated);
+              broadcastSyncEvent('CREDITS_CHANGED', updated);
+              return updated;
+            });
+            return;
+          }
+          setAllCredits(prev => {
+            const exists = prev.some(c => c.id === newCredit.id);
+            const updated = exists
+              ? prev.map(c => c.id === newCredit.id ? newCredit : c)
+              : [...prev, newCredit];
+            saveStoredCredits(updated);
+            broadcastSyncEvent('CREDITS_CHANGED', updated);
+            return updated;
+          });
+        } else if (payload.eventType === 'DELETE') {
+          const deletedId = (payload.old as any)?.id || (payload.new as any)?.id;
+          if (deletedId) {
+            setAllCredits(prev => {
+              const updated = prev.filter(c => c.id !== deletedId);
+              saveStoredCredits(updated);
+              broadcastSyncEvent('CREDITS_CHANGED', updated);
+              return updated;
+            });
+          }
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'credit_cards' }, (payload) => {
+        if ((payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') && payload.new) {
+          const newCard = mapRemoteToCard(payload.new);
+          if (newCard.deleted_at) {
+            setAllCreditCards(prev => {
+              const updated = prev.filter(c => c.id !== newCard.id);
+              saveStoredCreditCards(updated);
+              broadcastSyncEvent('CREDIT_CARDS_CHANGED', updated);
+              return updated;
+            });
+            return;
+          }
+          setAllCreditCards(prev => {
+            const exists = prev.some(c => c.id === newCard.id);
+            const updated = exists
+              ? prev.map(c => c.id === newCard.id ? newCard : c)
+              : [...prev, newCard];
+            saveStoredCreditCards(updated);
+            broadcastSyncEvent('CREDIT_CARDS_CHANGED', updated);
+            return updated;
+          });
+        } else if (payload.eventType === 'DELETE') {
+          const deletedId = (payload.old as any)?.id || (payload.new as any)?.id;
+          if (deletedId) {
+            setAllCreditCards(prev => {
+              const updated = prev.filter(c => c.id !== deletedId);
+              saveStoredCreditCards(updated);
+              broadcastSyncEvent('CREDIT_CARDS_CHANGED', updated);
+              return updated;
+            });
+          }
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'financial_settings' }, (payload) => {
+        if (payload.new && (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE')) {
+          const newSettings = mapRemoteToSettings(payload.new);
+          if (newSettings.userId === activeUser.id) {
+            setFinancialSettingsState(newSettings);
+            saveStoredFinancialSettings(newSettings, activeUser.id);
+            broadcastSyncEvent('SETTINGS_CHANGED', newSettings);
+          }
+        }
+      })
+      .subscribe((status, err) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn(`Supabase Realtime status (${status}):`, err);
+          setTimeout(() => {
+            if (navigator.onLine && getSupabaseClient()) {
+              syncData();
+            }
+          }, 3000);
+        }
+      });
 
     return () => {
       client.removeChannel(channel);
     };
-  }, []);
+  }, [supabaseConfig.url, supabaseConfig.anonKey, activeUser.id, syncData]);
 
   useEffect(() => {
     const handleSyncTrigger = () => {
@@ -567,8 +773,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     window.addEventListener('online', handleSyncTrigger);
     window.addEventListener('focus', handleSyncTrigger);
 
-    // Polling rápido cada 15 segundos como respaldo secundario
-    const timer = setInterval(handleSyncTrigger, 15000);
+    // Polling rápido cada 5 segundos como respaldo secundario
+    const timer = setInterval(handleSyncTrigger, 5000);
 
     return () => {
       window.removeEventListener('online', handleSyncTrigger);
@@ -578,29 +784,42 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [syncData]);
 
   // Helper: enviar inmediatamente a Supabase en background (fire-and-forget)
-  const pushToSupabaseNow = useCallback((entity: 'shifts' | 'transactions', action: 'upsert' | 'delete', payload: any, id?: string) => {
+  const pushToSupabaseNow = useCallback((
+    entity: 'shifts' | 'transactions' | 'credits' | 'credit_cards' | 'financial_settings',
+    action: 'upsert' | 'delete',
+    payload: any,
+    id?: string
+  ) => {
     const client = getSupabaseClient();
     if (!client || !navigator.onLine) return;
 
     if (action === 'upsert') {
       const { sync_status, ...clean } = payload;
-      client.from(entity).upsert(clean).then(({ error }) => {
+      let targetPayload = clean;
+      if (entity === 'credits') targetPayload = mapCreditToRemote(clean);
+      else if (entity === 'credit_cards') targetPayload = mapCardToRemote(clean);
+      else if (entity === 'financial_settings') targetPayload = mapSettingsToRemote(clean, clean.userId || activeUser.id);
+
+      client.from(entity).upsert(targetPayload).then(({ error }) => {
         if (error) {
-          // Reintentar sin shift_id si viola clave foránea (ej: shift no insertado aún)
           if (error.code === '23503' || error.message?.includes('foreign key constraint') || error.message?.includes('fkey')) {
-            const { shift_id, ...fallback } = clean;
-            client.from(entity).upsert({ ...fallback, shift_id: null }).then();
+            if (entity === 'transactions') {
+              const { shift_id, ...fallback } = clean;
+              client.from(entity).upsert({ ...fallback, shift_id: null }).then();
+            }
           } else {
             console.warn(`Push ${entity} failed:`, error.message);
           }
         }
       });
     } else if (action === 'delete' && id) {
-      client.from(entity).delete().eq('id', id).then(({ error }) => {
-        if (error) console.warn(`Delete ${entity} failed:`, error.message);
+      client.from(entity).update({ deleted_at: new Date().toISOString() }).eq('id', id).then(({ error }) => {
+        if (error) {
+          client.from(entity).delete().eq('id', id).then();
+        }
       });
     }
-  }, []);
+  }, [activeUser.id]);
 
   // Turnos CRUD
   const addShift = async (newShiftData: Omit<Shift, 'id' | 'userId'> & { id?: string }): Promise<Shift> => {
@@ -610,6 +829,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const newShift: Shift = {
       ...newShiftData,
+      tiempo_reparto_minutos: Number(newShiftData.tiempo_reparto_minutos) || 0,
+      tiempo_espera_minutos: Number(newShiftData.tiempo_espera_minutos) || 0,
+      kilometros: Number(newShiftData.kilometros) || 0,
       id,
       userId: activeUser.id,
       created_at,
@@ -617,9 +839,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     lastLocalChangeRef.current = Date.now();
-    const updated = [newShift, ...allShifts];
-    setAllShifts(updated);
-    saveStoredShifts(updated);
+    setAllShifts(prev => {
+      const filtered = prev.filter(s => s.id !== newShift.id);
+      const updated = [newShift, ...filtered];
+      saveStoredShifts(updated);
+      broadcastSyncEvent('SHIFTS_CHANGED', updated);
+      return updated;
+    });
 
     addToSyncQueue({ id, entity: 'shifts', action: 'insert', payload: newShift });
     pushToSupabaseNow('shifts', 'upsert', newShift);
@@ -629,19 +855,32 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const updateShift = async (updatedShift: Shift): Promise<void> => {
     lastLocalChangeRef.current = Date.now();
-    const updated = allShifts.map(s => (s.id === updatedShift.id ? updatedShift : s));
-    setAllShifts(updated);
-    saveStoredShifts(updated);
-    addToSyncQueue({ id: updatedShift.id, entity: 'shifts', action: 'insert', payload: updatedShift });
-    pushToSupabaseNow('shifts', 'upsert', updatedShift);
+    const cleanShift: Shift = {
+      ...updatedShift,
+      tiempo_reparto_minutos: Number(updatedShift.tiempo_reparto_minutos) || 0,
+      tiempo_espera_minutos: Number(updatedShift.tiempo_espera_minutos) || 0,
+      kilometros: Number(updatedShift.kilometros) || 0,
+      updated_at: new Date().toISOString()
+    };
+    setAllShifts(prev => {
+      const updated = prev.map(s => (s.id === cleanShift.id ? cleanShift : s));
+      saveStoredShifts(updated);
+      broadcastSyncEvent('SHIFTS_CHANGED', updated);
+      return updated;
+    });
+    addToSyncQueue({ id: cleanShift.id, entity: 'shifts', action: 'insert', payload: cleanShift });
+    pushToSupabaseNow('shifts', 'upsert', cleanShift);
     refreshPendingCount();
   };
 
   const deleteShift = async (id: string): Promise<void> => {
     lastLocalChangeRef.current = Date.now();
-    const updated = allShifts.filter(s => s.id !== id);
-    setAllShifts(updated);
-    saveStoredShifts(updated);
+    setAllShifts(prev => {
+      const updated = prev.filter(s => s.id !== id);
+      saveStoredShifts(updated);
+      broadcastSyncEvent('SHIFTS_CHANGED', updated);
+      return updated;
+    });
     addToSyncQueue({ id, entity: 'shifts', action: 'delete', payload: { id } });
     pushToSupabaseNow('shifts', 'delete', null, id);
     refreshPendingCount();
@@ -655,6 +894,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const newTx: Transaction = {
       ...txData,
+      monto: Number(txData.monto) || 0,
       id,
       userId: activeUser.id,
       created_at,
@@ -662,9 +902,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     lastLocalChangeRef.current = Date.now();
-    const updated = [newTx, ...allTransactions];
-    setAllTransactions(updated);
-    saveStoredTransactions(updated);
+    setAllTransactions(prev => {
+      const filtered = prev.filter(t => t.id !== newTx.id);
+      const updated = [newTx, ...filtered];
+      saveStoredTransactions(updated);
+      broadcastSyncEvent('TRANSACTIONS_CHANGED', updated);
+      return updated;
+    });
 
     addToSyncQueue({ id, entity: 'transactions', action: 'insert', payload: newTx });
     pushToSupabaseNow('transactions', 'upsert', newTx);
@@ -674,64 +918,104 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const updateTransaction = async (updatedTx: Transaction): Promise<void> => {
     lastLocalChangeRef.current = Date.now();
-    const updated = allTransactions.map(t => (t.id === updatedTx.id ? updatedTx : t));
-    setAllTransactions(updated);
-    saveStoredTransactions(updated);
-    addToSyncQueue({ id: updatedTx.id, entity: 'transactions', action: 'update', payload: updatedTx });
-    pushToSupabaseNow('transactions', 'upsert', updatedTx);
+    const cleanTx: Transaction = {
+      ...updatedTx,
+      monto: Number(updatedTx.monto) || 0,
+      updated_at: new Date().toISOString()
+    };
+    setAllTransactions(prev => {
+      const updated = prev.map(t => (t.id === cleanTx.id ? cleanTx : t));
+      saveStoredTransactions(updated);
+      broadcastSyncEvent('TRANSACTIONS_CHANGED', updated);
+      return updated;
+    });
+    addToSyncQueue({ id: cleanTx.id, entity: 'transactions', action: 'update', payload: cleanTx });
+    pushToSupabaseNow('transactions', 'upsert', cleanTx);
     refreshPendingCount();
   };
 
   const deleteTransaction = async (id: string): Promise<void> => {
     lastLocalChangeRef.current = Date.now();
-    const updated = allTransactions.filter(t => t.id !== id);
-    setAllTransactions(updated);
-    saveStoredTransactions(updated);
+    setAllTransactions(prev => {
+      const updated = prev.filter(t => t.id !== id);
+      saveStoredTransactions(updated);
+      broadcastSyncEvent('TRANSACTIONS_CHANGED', updated);
+      return updated;
+    });
     addToSyncQueue({ id, entity: 'transactions', action: 'delete', payload: { id } });
     pushToSupabaseNow('transactions', 'delete', null, id);
     refreshPendingCount();
   };
 
-  // Créditos CRUD
+  // Créditos CRUD con soporte para SyncQueue y UUID
   const addCredit = (creditData: Omit<CreditInstallment, 'id' | 'userId'>) => {
+    const nowIso = new Date().toISOString();
     const newCredit: CreditInstallment = {
       ...creditData,
       id: crypto.randomUUID(),
-      userId: activeUser.id
+      userId: activeUser.id,
+      created_at: nowIso,
+      updated_at: nowIso,
+      sync_status: navigator.onLine ? 'synced' : 'pending'
     };
     const updated = [...allCredits, newCredit];
     setAllCredits(updated);
     saveStoredCredits(updated);
+    addToSyncQueue({ id: newCredit.id, entity: 'credits', action: 'insert', payload: newCredit });
+    pushToSupabaseNow('credits', 'upsert', newCredit);
+    refreshPendingCount();
   };
 
   const updateCredit = (updatedCredit: CreditInstallment) => {
-    const updated = allCredits.map(c => (c.id === updatedCredit.id ? updatedCredit : c));
+    const withTimestamp: CreditInstallment = {
+      ...updatedCredit,
+      updated_at: new Date().toISOString(),
+      sync_status: navigator.onLine ? 'synced' : 'pending'
+    };
+    const updated = allCredits.map(c => (c.id === withTimestamp.id ? withTimestamp : c));
     setAllCredits(updated);
     saveStoredCredits(updated);
+    addToSyncQueue({ id: withTimestamp.id, entity: 'credits', action: 'update', payload: withTimestamp });
+    pushToSupabaseNow('credits', 'upsert', withTimestamp);
+    refreshPendingCount();
   };
 
   const deleteCredit = (id: string) => {
-    const updated = allCredits.filter(c => c.id !== id);
+    const nowIso = new Date().toISOString();
+    const updated = allCredits.map(c => c.id === id ? { ...c, deleted_at: nowIso } : c);
     setAllCredits(updated);
     saveStoredCredits(updated);
+    addToSyncQueue({ id, entity: 'credits', action: 'delete', payload: { id, deleted_at: nowIso } });
+    pushToSupabaseNow('credits', 'delete', null, id);
+    refreshPendingCount();
   };
 
   const toggleCreditPaid = (id: string) => {
     const now = new Date();
     const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const nowIso = now.toISOString();
+    let changedItem: CreditInstallment | null = null;
     const updated = allCredits.map(c => {
       if (c.id === id) {
         const nextState = !c.pagadoEsteMes;
-        return {
+        changedItem = {
           ...c,
           pagadoEsteMes: nextState,
-          ultimoMesPagado: nextState ? currentMonthStr : undefined
+          ultimoMesPagado: nextState ? currentMonthStr : undefined,
+          updated_at: nowIso,
+          sync_status: navigator.onLine ? 'synced' : 'pending'
         };
+        return changedItem;
       }
       return c;
     });
     setAllCredits(updated);
     saveStoredCredits(updated);
+    if (changedItem) {
+      addToSyncQueue({ id, entity: 'credits', action: 'update', payload: changedItem });
+      pushToSupabaseNow('credits', 'upsert', changedItem);
+      refreshPendingCount();
+    }
   };
 
   const requestNotificationPermission = async (): Promise<boolean> => {
@@ -739,7 +1023,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const perm = await Notification.requestPermission();
     if (perm === 'granted') {
       new Notification('🔔 Notificaciones Activadas', {
-        body: 'Te avisaremos los días 10 y 30 para tus cuotas.',
+        body: 'Te avisaremos oportunamente sobre tus cuotas y fechas de corte.',
         icon: './favicon.svg'
       });
       return true;
@@ -747,38 +1031,61 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return false;
   };
 
-  // Handlers para Tarjetas de Crédito y Cuentas Revolventes
+  // Handlers para Tarjetas de Crédito y Cuentas Revolventes (UUID garantizado)
   const addCreditCard = useCallback((card: Omit<CreditCardAccount, 'id' | 'userId'>) => {
+    const nowIso = new Date().toISOString();
     const newCard: CreditCardAccount = {
       ...card,
-      id: `cc-${Date.now()}`,
-      userId: activeUser.id
+      id: crypto.randomUUID(),
+      userId: activeUser.id,
+      created_at: nowIso,
+      updated_at: nowIso,
+      sync_status: navigator.onLine ? 'synced' : 'pending'
     };
     const updated = [...allCreditCards, newCard];
     setAllCreditCards(updated);
     saveStoredCreditCards(updated);
-  }, [allCreditCards, activeUser.id]);
+    addToSyncQueue({ id: newCard.id, entity: 'credit_cards', action: 'insert', payload: newCard });
+    pushToSupabaseNow('credit_cards', 'upsert', newCard);
+    refreshPendingCount();
+  }, [allCreditCards, activeUser.id, pushToSupabaseNow, refreshPendingCount]);
 
   const updateCreditCard = useCallback((card: CreditCardAccount) => {
-    const updated = allCreditCards.map(c => c.id === card.id ? card : c);
+    const nowIso = new Date().toISOString();
+    const withTimestamp: CreditCardAccount = {
+      ...card,
+      updated_at: nowIso,
+      sync_status: navigator.onLine ? 'synced' : 'pending'
+    };
+    const updated = allCreditCards.map(c => c.id === withTimestamp.id ? withTimestamp : c);
     setAllCreditCards(updated);
     saveStoredCreditCards(updated);
-  }, [allCreditCards]);
+    addToSyncQueue({ id: withTimestamp.id, entity: 'credit_cards', action: 'update', payload: withTimestamp });
+    pushToSupabaseNow('credit_cards', 'upsert', withTimestamp);
+    refreshPendingCount();
+  }, [allCreditCards, pushToSupabaseNow, refreshPendingCount]);
 
   const deleteCreditCard = useCallback((id: string) => {
-    const updated = allCreditCards.filter(c => c.id !== id);
+    const nowIso = new Date().toISOString();
+    const updated = allCreditCards.map(c => c.id === id ? { ...c, deleted_at: nowIso } : c);
     setAllCreditCards(updated);
     saveStoredCreditCards(updated);
-  }, [allCreditCards]);
+    addToSyncQueue({ id, entity: 'credit_cards', action: 'delete', payload: { id, deleted_at: nowIso } });
+    pushToSupabaseNow('credit_cards', 'delete', null, id);
+    refreshPendingCount();
+  }, [allCreditCards, pushToSupabaseNow, refreshPendingCount]);
 
-  // Handlers para Metas y Referencias Financieras
+  // Handlers para Metas y Referencias Financieras aisladas por usuario
   const updateFinancialSettings = useCallback((newSettings: Partial<FinancialSettings>) => {
     setFinancialSettingsState(prev => {
-      const updated = { ...prev, ...newSettings };
-      saveStoredFinancialSettings(updated);
+      const updated = { ...prev, ...newSettings, userId: activeUser.id, updated_at: new Date().toISOString() };
+      saveStoredFinancialSettings(updated, activeUser.id);
+      addToSyncQueue({ id: activeUser.id, entity: 'financial_settings', action: 'update', payload: updated });
+      pushToSupabaseNow('financial_settings', 'upsert', updated, activeUser.id);
+      refreshPendingCount();
       return updated;
     });
-  }, []);
+  }, [activeUser.id, pushToSupabaseNow, refreshPendingCount]);
 
   const setFilterRange = useCallback((range: TimeRange, customStart?: string, customEnd?: string, referenceDate?: string) => {
     setFilter(prev => {

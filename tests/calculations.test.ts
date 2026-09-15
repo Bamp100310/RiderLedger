@@ -10,6 +10,8 @@ import {
   navigatePeriod,
   getPeriodLabel,
   calculateFinancialSummary,
+  calculateCreditAnalysis,
+  getPeriodFinancialChartData,
   calculateThreeTierFinancials,
   calculateLaborBenchmark,
   analyzeCreditCards,
@@ -263,3 +265,136 @@ test('Shift grouping aggregates shifts and route expenses by month correctly', (
   assert.equal(grouped[0].ingresos, 80000);
   assert.equal(grouped[0].gastosRuta, 15000);
 });
+
+test('calculateCreditAnalysis: 0 cuotas pendientes produces 100% coverage and no false deficit', () => {
+  // Case A: No credits at all
+  const analysisEmpty = calculateCreditAnalysis([], 500000, parseLocalDate('2026-09-14'));
+  assert.equal(analysisEmpty.sinCuotasPendientes, true);
+  assert.equal(analysisEmpty.estaCubierto, true);
+  assert.equal(analysisEmpty.porcentajeCobertura, 100);
+  assert.equal(analysisEmpty.totalCuotasPendientes, 0);
+  assert.equal(analysisEmpty.diferencia, 500000);
+
+  // Case B: Credits exist but are already paid for this cycle
+  const creditsPaid: CreditInstallment[] = [
+    { id: 'c-1', nombre: 'Moto', montoCuota: 300000, diaPago: 10, pagadoEsteMes: true },
+    { id: 'c-2', nombre: 'Préstamo', montoCuota: 200000, diaPago: 30, pagadoEsteMes: true }
+  ];
+  const analysisPaid = calculateCreditAnalysis(creditsPaid, 150000, parseLocalDate('2026-09-14'));
+  assert.equal(analysisPaid.sinCuotasPendientes, true);
+  assert.equal(analysisPaid.estaCubierto, true);
+  assert.equal(analysisPaid.porcentajeCobertura, 100);
+  assert.equal(analysisPaid.totalCuotasPendientes, 0);
+  assert.equal(analysisPaid.diferencia, 150000);
+
+  // Case C: Pending cuota with sufficient surplus
+  const creditsPending: CreditInstallment[] = [
+    { id: 'c-3', nombre: 'Cuota Fin de Mes', montoCuota: 250000, diaPago: 30, pagadoEsteMes: false }
+  ];
+  const analysisCovered = calculateCreditAnalysis(creditsPending, 300000, parseLocalDate('2026-09-14'));
+  assert.equal(analysisCovered.sinCuotasPendientes, false);
+  assert.equal(analysisCovered.estaCubierto, true);
+  assert.equal(analysisCovered.porcentajeCobertura, 120); // 300k / 250k = 120%
+  assert.equal(analysisCovered.totalCuotasPendientes, 250000);
+  assert.equal(analysisCovered.diferencia, 50000);
+
+  // Case D: Pending cuota with deficit (surplus < cuota)
+  const analysisDeficit = calculateCreditAnalysis(creditsPending, 100000, parseLocalDate('2026-09-14'));
+  assert.equal(analysisDeficit.sinCuotasPendientes, false);
+  assert.equal(analysisDeficit.estaCubierto, false);
+  assert.equal(analysisDeficit.porcentajeCobertura, 40); // 100k / 250k = 40%
+  assert.equal(analysisDeficit.diferencia, -150000);
+});
+
+test('analyzeCreditCards: calculates real due date buckets (7d, 15d, month) and payment options', () => {
+  // Reference date: September 14, 2026
+  const refDate = parseLocalDate('2026-09-14');
+
+  const cards: CreditCardAccount[] = [
+    // Due on 18th (4 days away -> in 7 days, in 15 days, in this month)
+    { id: 'cc-1', nombre: 'Nu', cupoTotal: 2000000, saldoUtilizado: 500000, pagoMinimo: 50000, fechaCorte: 8, fechaPago: 18 },
+    // Due on 26th (12 days away -> NOT in 7 days, in 15 days, in this month)
+    { id: 'cc-2', nombre: 'Bancolombia', cupoTotal: 3000000, saldoUtilizado: 800000, pagoMinimo: 80000, fechaCorte: 15, fechaPago: 26 },
+    // Due on 5th (already passed for Sep, next due is Oct 5 -> NOT in 7d, NOT in 15d, NOT in this month)
+    { id: 'cc-3', nombre: 'Rappi', cupoTotal: 1000000, saldoUtilizado: 200000, pagoMinimo: 20000, fechaCorte: 25, fechaPago: 5 }
+  ];
+
+  const analysis = analyzeCreditCards(cards, refDate);
+  assert.equal(analysis.deudaTotalTarjetas, 1500000);
+  assert.equal(analysis.cupoTotalTarjetas, 6000000);
+  assert.equal(analysis.cupoDisponibleTotal, 4500000);
+  assert.equal(analysis.pagoMinimoTotal, 150000);
+  assert.equal(analysis.pagoCompletoTotal, 1500000);
+
+  // Check due date buckets
+  assert.equal(analysis.vencenEn7Dias.length, 1);
+  assert.equal(analysis.vencenEn7Dias[0].nombre, 'Nu');
+
+  assert.equal(analysis.vencenEn15Dias.length, 2);
+  assert.equal(analysis.vencenEsteMes.length, 2);
+  assert.ok(analysis.proximoVencimiento !== null);
+  assert.equal(analysis.proximoVencimiento?.card.nombre, 'Nu');
+});
+
+test('getPeriodFinancialChartData: hoy breakdown, semana Mon-Sun and año 12 months', () => {
+  const refDate = parseLocalDate('2026-09-14'); // Monday
+  const txs: Transaction[] = [
+    { id: 't1', fecha: '2026-09-14', tipo: 'INGRESO', categoria: 'DOMICILIOS', subcategoria: 'Rappi', monto: 75000, medio_pago: 'EFECTIVO' },
+    { id: 't2', fecha: '2026-09-14', tipo: 'GASTO', categoria: 'COMBUSTIBLE', subcategoria: 'Gasolina', monto: 20000, medio_pago: 'EFECTIVO' },
+    { id: 't3', fecha: '2026-09-16', tipo: 'INGRESO', categoria: 'PASAJEROS', subcategoria: 'Didi', monto: 45000, medio_pago: 'EFECTIVO' }
+  ];
+
+  // Hoy: exactly 1 item representing referenceDate
+  const hoyData = getPeriodFinancialChartData(txs, 'hoy', refDate);
+  assert.equal(hoyData.length, 1);
+  assert.equal(hoyData[0].fechaISO, '2026-09-14');
+  assert.equal(hoyData[0].Ingresos, 75000);
+  assert.equal(hoyData[0].Gastos, 20000);
+  assert.equal(hoyData[0].Superavit, 55000);
+  assert.equal(hoyData[0].sinActividad, false);
+
+  // Semana: exactly 7 items from Monday 2026-09-14 to Sunday 2026-09-20
+  const semanaData = getPeriodFinancialChartData(txs, 'semana', refDate);
+  assert.equal(semanaData.length, 7);
+  assert.equal(semanaData[0].fechaISO, '2026-09-14');
+  assert.equal(semanaData[0].Ingresos, 75000);
+  assert.equal(semanaData[2].fechaISO, '2026-09-16');
+  assert.equal(semanaData[2].Pasajeros, 45000);
+  assert.equal(semanaData[6].fechaISO, '2026-09-20');
+
+  // Año: exactly 12 items (Ene to Dic)
+  const anioData = getPeriodFinancialChartData(txs, 'año', refDate);
+  assert.equal(anioData.length, 12);
+  assert.equal(anioData[8].periodo, 'Sep');
+  assert.equal(anioData[8].Ingresos, 120000);
+});
+
+test('analyzeExpenseHealth: 50/30/20 evaluated on total income and flags deficit', () => {
+  // Case A: Balanced distribution
+  const txsBalanced: Transaction[] = [
+    { id: 't1', fecha: '2026-09-10', tipo: 'INGRESO', categoria: 'DOMICILIOS', monto: 1000000, medio_pago: 'EFECTIVO' },
+    { id: 't2', fecha: '2026-09-10', tipo: 'GASTO', categoria: 'COMBUSTIBLE', monto: 300000, medio_pago: 'EFECTIVO' }, // Necesidades
+    { id: 't3', fecha: '2026-09-10', tipo: 'GASTO', categoria: 'HONORARIOS_ACOMPANANTE', monto: 150000, medio_pago: 'EFECTIVO' }, // Necesidades
+    { id: 't4', fecha: '2026-09-10', tipo: 'GASTO', categoria: 'OTROS_GASTOS', monto: 200000, medio_pago: 'EFECTIVO' } // Deseos
+  ];
+  const healthBalanced = analyzeExpenseHealth(txsBalanced);
+  assert.equal(healthBalanced.totalGastos, 650000);
+  assert.equal(healthBalanced.ratioGastoIngresoPct, 65);
+  assert.equal(healthBalanced.porcentajeNecesidadesReal, 45); // 450k / 1M = 45%
+  assert.equal(healthBalanced.porcentajeDeseosReal, 20); // 200k / 1M = 20%
+  assert.equal(healthBalanced.alertaGastos, null);
+
+  // Case B: Deficit (expenses > 100% of income)
+  const txsDeficit: Transaction[] = [
+    { id: 't1', fecha: '2026-09-10', tipo: 'INGRESO', categoria: 'DOMICILIOS', monto: 200000, medio_pago: 'EFECTIVO' },
+    { id: 't2', fecha: '2026-09-10', tipo: 'GASTO', categoria: 'COMBUSTIBLE', monto: 150000, medio_pago: 'EFECTIVO' },
+    { id: 't3', fecha: '2026-09-10', tipo: 'GASTO', categoria: 'MANTENIMIENTO_MOTO', monto: 120000, medio_pago: 'EFECTIVO' }
+  ];
+  const healthDeficit = analyzeExpenseHealth(txsDeficit);
+  assert.equal(healthDeficit.totalGastos, 270000);
+  assert.equal(healthDeficit.ratioGastoIngresoPct, 135);
+  assert.ok(healthDeficit.alertaGastos !== null);
+  assert.ok(healthDeficit.alertaGastos?.includes('Déficit presupuestario'));
+  assert.ok(healthDeficit.explicacion50_30_20.includes('déficit presupuestario'));
+});
+

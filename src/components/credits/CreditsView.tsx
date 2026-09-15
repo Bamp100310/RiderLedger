@@ -157,12 +157,18 @@ export const CreditsView: React.FC = () => {
           <div className="text-right sm:self-center">
             <span
               className={`px-3 py-1 rounded-full text-xs font-black inline-block ${
-                creditAnalysis.estaCubierto
+                creditAnalysis.sinCuotasPendientes
+                  ? 'bg-sky-500/20 text-sky-600 dark:text-sky-400'
+                  : creditAnalysis.estaCubierto
                   ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
                   : 'bg-rose-500/20 text-rose-600 dark:text-rose-400'
               }`}
             >
-              {creditAnalysis.estaCubierto ? '¡CUBIERTO!' : 'FONDOS INSUFICIENTES'}
+              {creditAnalysis.sinCuotasPendientes
+                ? 'AL DÍA (SIN CUOTAS)'
+                : creditAnalysis.estaCubierto
+                ? '¡CUBIERTO!'
+                : 'FONDOS INSUFICIENTES'}
             </span>
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1">
               Cobertura al <b>{creditAnalysis.porcentajeCobertura}%</b>
@@ -175,13 +181,21 @@ export const CreditsView: React.FC = () => {
           <div
             style={{ width: `${Math.min(100, creditAnalysis.porcentajeCobertura)}%` }}
             className={`h-full ${
-              creditAnalysis.estaCubierto ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-gradient-to-r from-amber-500 to-rose-500'
+              creditAnalysis.sinCuotasPendientes
+                ? 'bg-gradient-to-r from-sky-500 to-emerald-400'
+                : creditAnalysis.estaCubierto
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                : 'bg-gradient-to-r from-amber-500 to-rose-500'
             }`}
           />
         </div>
 
         <div className="mt-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/5 text-xs">
-          {creditAnalysis.estaCubierto ? (
+          {creditAnalysis.sinCuotasPendientes ? (
+            <span className="text-sky-700 dark:text-sky-300 font-semibold">
+              🎉 ¡Excelente! No tienes cuotas pendientes para este corte. Tu superávit acumulado de <b>{formatCurrency(creditAnalysis.superavitActual)}</b> está 100% disponible para ti.
+            </span>
+          ) : creditAnalysis.estaCubierto ? (
             <span className="text-emerald-700 dark:text-emerald-300 font-semibold">
               🎉 ¡Felicidades! Con lo que has generado puedes pagar tus cuotas del día {creditAnalysis.proximoDiaPago} y aún te sobran <b>{formatCurrency(creditAnalysis.diferencia)}</b> de ganancia libre.
             </span>
