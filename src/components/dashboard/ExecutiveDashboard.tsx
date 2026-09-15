@@ -229,13 +229,13 @@ export const ExecutiveDashboard: React.FC = () => {
 
       {/* Si el período es 'Mes', mostrar indicador informativo de planificación */}
       {filter.range === 'mes' && threeTierFinancials.obligacionesMensualesPactadas > 0 && (
-        <div className="bg-slate-900/60 border border-white/5 rounded-xl px-4 py-2 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-400 gap-1">
+        <div className="bg-slate-100/90 dark:bg-slate-900/60 border border-slate-200/90 dark:border-white/5 rounded-xl px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-600 dark:text-slate-400 gap-1 shadow-xs transition-colors">
           <span>
             📋 <b>Planificación mensual:</b> Obligaciones fijas pactadas del mes:{' '}
-            <b className="text-slate-200">{formatCurrency(threeTierFinancials.obligacionesMensualesPactadas)}</b>
+            <b className="text-slate-900 dark:text-slate-200">{formatCurrency(threeTierFinancials.obligacionesMensualesPactadas)}</b>
           </span>
-          <span className="text-[11px] text-slate-400">
-            Pagos reales registrados este mes: <b className="text-emerald-400">{formatCurrency(threeTierFinancials.pagosDeudaEfectivosPeriodo)}</b>
+          <span className="text-[11px] text-slate-500 dark:text-slate-400">
+            Pagos reales registrados este mes: <b className="text-emerald-600 dark:text-emerald-400">{formatCurrency(threeTierFinancials.pagosDeudaEfectivosPeriodo)}</b>
           </span>
         </div>
       )}
@@ -253,12 +253,12 @@ export const ExecutiveDashboard: React.FC = () => {
         <div className="app-card rounded-2xl p-5 lg:col-span-2 space-y-3 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <TrendingUp className="w-4 h-4 text-cyan-400" />
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <TrendingUp className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
                 ¿Cómo vas frente al período anterior?
               </h3>
               {periodComparison && (
-                <span className="text-[10px] text-slate-500 font-semibold">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">
                   {periodComparison.periodoAnteriorNombre}
                 </span>
               )}
@@ -267,13 +267,13 @@ export const ExecutiveDashboard: React.FC = () => {
             {/* 4 Pills de Variación */}
             {periodComparison ? (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-3">
-                <div className="bg-slate-900/50 p-2.5 rounded-xl border border-white/5">
-                  <span className="text-[10px] text-slate-400 block">Ingresos</span>
+                <div className="bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-xl border border-slate-200/80 dark:border-white/5">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Ingresos</span>
                   <span
                     className={`text-sm font-black ${
                       periodComparison.variacionIngresosPct >= 0
-                        ? 'text-emerald-400'
-                        : 'text-rose-400'
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-rose-600 dark:text-rose-400'
                     }`}
                   >
                     {periodComparison.variacionIngresosPct >= 0 ? '+' : ''}
@@ -281,13 +281,13 @@ export const ExecutiveDashboard: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="bg-slate-900/50 p-2.5 rounded-xl border border-white/5">
-                  <span className="text-[10px] text-slate-400 block">Gastos</span>
+                <div className="bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-xl border border-slate-200/80 dark:border-white/5">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Gastos</span>
                   <span
                     className={`text-sm font-black ${
                       periodComparison.variacionGastosPct <= 0
-                        ? 'text-emerald-400'
-                        : 'text-rose-400'
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-rose-600 dark:text-rose-400'
                     }`}
                   >
                     {periodComparison.variacionGastosPct >= 0 ? '+' : ''}
@@ -295,13 +295,13 @@ export const ExecutiveDashboard: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="bg-slate-900/50 p-2.5 rounded-xl border border-white/5">
-                  <span className="text-[10px] text-slate-400 block">Superávit</span>
+                <div className="bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-xl border border-slate-200/80 dark:border-white/5">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Superávit</span>
                   <span
                     className={`text-sm font-black ${
                       periodComparison.variacionSuperavitPct >= 0
-                        ? 'text-emerald-400'
-                        : 'text-rose-400'
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-rose-600 dark:text-rose-400'
                     }`}
                   >
                     {periodComparison.variacionSuperavitPct >= 0 ? '+' : ''}
@@ -309,15 +309,15 @@ export const ExecutiveDashboard: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="bg-slate-900/50 p-2.5 rounded-xl border border-white/5">
-                  <span className="text-[10px] text-slate-400 block">Tarjetas</span>
+                <div className="bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-xl border border-slate-200/80 dark:border-white/5">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Tarjetas</span>
                   <span
                     className={`text-sm font-black ${
                       creditCardAnalysis.semaforoUtilizacion === 'VERDE'
-                        ? 'text-emerald-400'
+                        ? 'text-emerald-600 dark:text-emerald-400'
                         : creditCardAnalysis.semaforoUtilizacion === 'AMARILLO'
-                        ? 'text-amber-400'
-                        : 'text-rose-400'
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-rose-600 dark:text-rose-400'
                     }`}
                   >
                     {creditCardAnalysis.tarjetas.length > 0
@@ -327,14 +327,14 @@ export const ExecutiveDashboard: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-slate-400 pt-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 pt-3">
                 No hay suficiente historial del período anterior para calcular variaciones comparativas.
               </p>
             )}
           </div>
 
           {periodComparison && (
-            <p className="text-xs text-slate-300 bg-slate-950/40 p-3 rounded-xl border border-white/5 leading-relaxed">
+            <p className="text-xs text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-950/40 p-3 rounded-xl border border-slate-200/80 dark:border-white/5 leading-relaxed">
               {periodComparison.explicacionNarrativa}
             </p>
           )}
@@ -343,8 +343,8 @@ export const ExecutiveDashboard: React.FC = () => {
         {/* 1-2 Recomendaciones Accionables Máximas */}
         <div className="app-card rounded-2xl p-5 space-y-3 shadow-sm flex flex-col justify-between">
           <div>
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <Lightbulb className="w-4 h-4 text-amber-400" />
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+              <Lightbulb className="w-4 h-4 text-amber-500 dark:text-amber-400" />
               Prioridades para este período
             </h3>
 
@@ -352,20 +352,20 @@ export const ExecutiveDashboard: React.FC = () => {
               {topRecommendations.map(rec => (
                 <div
                   key={rec.id}
-                  className="p-3 rounded-xl bg-slate-900/60 border border-white/5 space-y-1"
+                  className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/5 space-y-1"
                 >
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs">{rec.badge}</span>
-                    <h4 className="text-xs font-bold text-white truncate">{rec.titulo}</h4>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">{rec.titulo}</h4>
                   </div>
-                  <p className="text-[11px] text-slate-400 line-clamp-2 leading-snug">
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-2 leading-snug">
                     {rec.descripcion}
                   </p>
                 </div>
               ))}
 
               {topRecommendations.length === 0 && (
-                <div className="p-3 rounded-xl bg-slate-900/40 text-xs text-slate-400">
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/40 text-xs text-slate-600 dark:text-slate-400 border border-slate-200/80 dark:border-white/5">
                   Operación equilibrada sin alertas críticas de deuda o sobrecarga.
                 </div>
               )}
@@ -374,7 +374,7 @@ export const ExecutiveDashboard: React.FC = () => {
 
           <Link
             to="/salud-financiera"
-            className="inline-flex items-center gap-1 text-xs font-bold text-cyan-400 hover:text-cyan-300 pt-1"
+            className="inline-flex items-center gap-1 text-xs font-bold text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 dark:hover:text-cyan-300 pt-1"
           >
             Ver análisis y diagnóstico completo →
           </Link>
@@ -385,7 +385,7 @@ export const ExecutiveDashboard: React.FC = () => {
       {/* 5. DETALLE: ACCESO RÁPIDO A VISTAS ESPECIALIZADAS                         */}
       {/* ========================================================================= */}
       <div className="pt-2">
-        <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-3">
+        <h3 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
           Profundizar en tu información
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -393,12 +393,12 @@ export const ExecutiveDashboard: React.FC = () => {
             to="/salud-financiera"
             className="app-card rounded-2xl p-3.5 hover:border-cyan-500/40 transition-all flex items-center gap-3 group"
           >
-            <div className="p-2.5 rounded-xl bg-cyan-500/15 text-cyan-400 group-hover:scale-105 transition-transform">
+            <div className="p-2.5 rounded-xl bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 group-hover:scale-105 transition-transform">
               <HeartPulse className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <h4 className="text-xs font-bold text-white truncate">Salud Financiera</h4>
-              <p className="text-[10px] text-slate-400 truncate">Copiloto & 50/30/20</p>
+              <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">Salud Financiera</h4>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Copiloto & 50/30/20</p>
             </div>
           </Link>
 
@@ -406,12 +406,12 @@ export const ExecutiveDashboard: React.FC = () => {
             to="/turnos"
             className="app-card rounded-2xl p-3.5 hover:border-emerald-500/40 transition-all flex items-center gap-3 group"
           >
-            <div className="p-2.5 rounded-xl bg-emerald-500/15 text-emerald-400 group-hover:scale-105 transition-transform">
+            <div className="p-2.5 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform">
               <Bike className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <h4 className="text-xs font-bold text-white truncate">Jornadas & Km</h4>
-              <p className="text-[10px] text-slate-400 truncate">Horas y kilometraje</p>
+              <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">Jornadas & Km</h4>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Horas y kilometraje</p>
             </div>
           </Link>
 
@@ -419,12 +419,12 @@ export const ExecutiveDashboard: React.FC = () => {
             to="/creditos"
             className="app-card rounded-2xl p-3.5 hover:border-purple-500/40 transition-all flex items-center gap-3 group"
           >
-            <div className="p-2.5 rounded-xl bg-purple-500/15 text-purple-400 group-hover:scale-105 transition-transform">
+            <div className="p-2.5 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 group-hover:scale-105 transition-transform">
               <CreditCard className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <h4 className="text-xs font-bold text-white truncate">Tarjetas & Cuotas</h4>
-              <p className="text-[10px] text-slate-400 truncate">Gestión de pasivos</p>
+              <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">Tarjetas & Cuotas</h4>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Gestión de pasivos</p>
             </div>
           </Link>
 
@@ -432,12 +432,12 @@ export const ExecutiveDashboard: React.FC = () => {
             to="/reportes"
             className="app-card rounded-2xl p-3.5 hover:border-amber-500/40 transition-all flex items-center gap-3 group"
           >
-            <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-400 group-hover:scale-105 transition-transform">
+            <div className="p-2.5 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 group-hover:scale-105 transition-transform">
               <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <h4 className="text-xs font-bold text-white truncate">Reportes</h4>
-              <p className="text-[10px] text-slate-400 truncate">Consolidado y exportar</p>
+              <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">Reportes</h4>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">Consolidado y exportar</p>
             </div>
           </Link>
         </div>

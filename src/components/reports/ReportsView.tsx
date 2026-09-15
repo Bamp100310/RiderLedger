@@ -46,9 +46,11 @@ const EXPENSE_CATEGORY_COLORS: Record<string, string> = {
 };
 
 export const ReportsView: React.FC = () => {
-  const { shifts, transactions } = useAppData();
+  const { shifts, transactions, theme } = useAppData();
   const [groupBy, setGroupBy] = useState<'dia' | 'semana' | 'mes'>('dia');
   const [viewMode, setViewMode] = useState<'combinada' | 'graficas' | 'tabla'>('combinada');
+
+  const isDark = theme === 'dark';
 
   const reports = useMemo(() => {
     return generateConsolidatedReport(shifts, transactions, groupBy);
@@ -137,8 +139,8 @@ export const ReportsView: React.FC = () => {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-slate-900 border border-white/20 p-3 rounded-xl shadow-2xl text-xs space-y-1 z-50">
-          <p className="font-bold text-white border-b border-white/10 pb-1">{label}</p>
+        <div className="bg-white/95 dark:bg-slate-900 border border-slate-200 dark:border-white/20 p-3 rounded-xl shadow-xl dark:shadow-2xl text-xs space-y-1 z-50 backdrop-blur-md">
+          <p className="font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-white/10 pb-1">{label}</p>
           {payload.map((entry: any, index: number) => (
             <p key={`item-${index}`} style={{ color: entry.color }} className="font-semibold flex justify-between gap-4">
               <span>{entry.name}:</span>
@@ -157,9 +159,9 @@ export const ReportsView: React.FC = () => {
       const totalExp = totals.totalGastos > 0 ? totals.totalGastos : 1;
       const pct = Math.round((data.value / totalExp) * 100);
       return (
-        <div className="bg-slate-900 border border-white/20 p-2.5 rounded-xl shadow-2xl text-xs z-50">
-          <p className="font-bold text-white">{data.name}</p>
-          <p className="text-slate-300 font-semibold mt-0.5">
+        <div className="bg-white/95 dark:bg-slate-900 border border-slate-200 dark:border-white/20 p-2.5 rounded-xl shadow-xl dark:shadow-2xl text-xs z-50 backdrop-blur-md">
+          <p className="font-bold text-slate-900 dark:text-white">{data.name}</p>
+          <p className="text-slate-600 dark:text-slate-300 font-semibold mt-0.5">
             {formatCurrency(data.value)} ({pct}%)
           </p>
         </div>
@@ -333,16 +335,16 @@ export const ReportsView: React.FC = () => {
                 <div className="h-72 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart key={`rep-bar-${dataSignature}`} data={chronologicalReports} barGap={4} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} vertical={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#334155' : '#e2e8f0'} opacity={0.6} vertical={false} />
                       <XAxis
                         dataKey="periodo"
-                        tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }}
-                        stroke="#475569"
+                        tick={{ fill: isDark ? '#94a3b8' : '#64748b', fontSize: 10, fontWeight: 600 }}
+                        stroke={isDark ? '#475569' : '#cbd5e1'}
                         tickLine={false}
                       />
                       <YAxis
-                        tick={{ fill: '#94a3b8', fontSize: 10 }}
-                        stroke="#475569"
+                        tick={{ fill: isDark ? '#94a3b8' : '#64748b', fontSize: 10 }}
+                        stroke={isDark ? '#475569' : '#cbd5e1'}
                         tickFormatter={(val) => formatCurrencyCompact(val)}
                         tickLine={false}
                       />
@@ -447,27 +449,28 @@ export const ReportsView: React.FC = () => {
                         <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#334155' : '#e2e8f0'} opacity={0.6} vertical={false} />
                     <XAxis
                       dataKey="periodo"
-                      tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }}
-                      stroke="#475569"
+                      tick={{ fill: isDark ? '#94a3b8' : '#64748b', fontSize: 10, fontWeight: 600 }}
+                      stroke={isDark ? '#475569' : '#cbd5e1'}
                       tickLine={false}
                     />
                     <YAxis
-                      tick={{ fill: '#94a3b8', fontSize: 10 }}
-                      stroke="#475569"
+                      tick={{ fill: isDark ? '#94a3b8' : '#64748b', fontSize: 10 }}
+                      stroke={isDark ? '#475569' : '#cbd5e1'}
                       tickFormatter={(val) => `$${Math.round(val / 1000)}k`}
                       tickLine={false}
                     />
                     <Tooltip
                       formatter={(value: any) => [formatCurrency(Number(value)) + '/h', 'Rendimiento']}
                       contentStyle={{
-                        backgroundColor: '#0f172a',
-                        borderColor: 'rgba(255,255,255,0.15)',
+                        backgroundColor: isDark ? '#0f172a' : '#ffffff',
+                        borderColor: isDark ? 'rgba(255,255,255,0.15)' : '#e2e8f0',
                         borderRadius: '0.75rem',
                         fontSize: '12px',
-                        color: '#fff'
+                        color: isDark ? '#fff' : '#0f172a',
+                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)'
                       }}
                     />
                     <Area

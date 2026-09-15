@@ -35,9 +35,11 @@ const EXPENSE_COLORS: Record<string, string> = {
 const PIE_PALETTE = ['#f59e0b', '#6366f1', '#ec4899', '#8b5cf6', '#06b6d4', '#10b981', '#f43f5e', '#64748b'];
 
 export const ChartsSection: React.FC = () => {
-  const { filteredTransactions, filter } = useAppData();
+  const { filteredTransactions, filter, theme } = useAppData();
   const [activeChartTab, setActiveChartTab] = useState<'comparativo' | 'apilado' | 'gastos' | 'ingresos'>('comparativo');
   const [historicalGranularity, setHistoricalGranularity] = useState<'dia' | 'semana' | 'mes'>('mes');
+
+  const isDark = theme === 'dark';
 
   // Obtener datos del período estricto utilizando la fecha focal referenceDate
   const chartData = useMemo(() => {
@@ -98,26 +100,26 @@ export const ChartsSection: React.FC = () => {
     if (active && payload && payload.length) {
       const dataItem = payload[0]?.payload;
       return (
-        <div className="bg-slate-900 border border-white/20 p-3 rounded-2xl shadow-2xl text-xs space-y-1.5 min-w-[170px]">
-          <div className="border-b border-white/10 pb-1 flex items-center justify-between">
-            <span className="font-bold text-white">{dataItem?.periodo || label}</span>
+        <div className="bg-white/95 dark:bg-slate-900 border border-slate-200 dark:border-white/20 p-3 rounded-2xl shadow-xl dark:shadow-2xl text-xs space-y-1.5 min-w-[170px] backdrop-blur-md">
+          <div className="border-b border-slate-100 dark:border-white/10 pb-1 flex items-center justify-between">
+            <span className="font-bold text-slate-900 dark:text-white">{dataItem?.periodo || label}</span>
             {dataItem?.sinActividad && (
-              <span className="text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">Sin turnos</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">Sin turnos</span>
             )}
           </div>
           {payload.map((entry: any, index: number) => (
             <div key={`item-${index}`} className="flex items-center justify-between gap-2">
-              <span className="flex items-center gap-1 text-slate-300">
+              <span className="flex items-center gap-1 text-slate-600 dark:text-slate-300">
                 <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
                 {entry.name}:
               </span>
-              <span className="font-extrabold text-white">{formatCurrency(entry.value)}</span>
+              <span className="font-extrabold text-slate-900 dark:text-white">{formatCurrency(entry.value)}</span>
             </div>
           ))}
           {dataItem && (
-            <div className="border-t border-white/10 pt-1 flex items-center justify-between font-bold">
-              <span className="text-slate-400">Superávit:</span>
-              <span className={dataItem.Superavit >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+            <div className="border-t border-slate-100 dark:border-white/10 pt-1 flex items-center justify-between font-bold">
+              <span className="text-slate-500 dark:text-slate-400">Superávit:</span>
+              <span className={dataItem.Superavit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
                 {formatCurrency(dataItem.Superavit)}
               </span>
             </div>
@@ -132,9 +134,9 @@ export const ChartsSection: React.FC = () => {
     if (active && payload && payload.length) {
       const data = payload[0];
       return (
-        <div className="bg-slate-900 border border-white/20 p-2.5 rounded-xl shadow-xl text-xs">
-          <p className="font-bold text-white">{data.name}</p>
-          <p className="text-emerald-400 font-extrabold">{formatCurrency(data.value)}</p>
+        <div className="bg-white/95 dark:bg-slate-900 border border-slate-200 dark:border-white/20 p-2.5 rounded-xl shadow-xl text-xs backdrop-blur-md">
+          <p className="font-bold text-slate-900 dark:text-white">{data.name}</p>
+          <p className="text-emerald-600 dark:text-emerald-400 font-extrabold">{formatCurrency(data.value)}</p>
         </div>
       );
     }
@@ -142,25 +144,25 @@ export const ChartsSection: React.FC = () => {
   };
 
   return (
-    <div className="bg-slate-900/80 border border-white/10 rounded-3xl p-4 sm:p-5 space-y-4">
+    <div className="bg-white dark:bg-slate-900/80 border border-slate-200/90 dark:border-white/10 rounded-3xl p-4 sm:p-5 space-y-4 shadow-xs dark:shadow-md transition-colors">
       {/* Header y Selectores */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h3 className="text-xs font-black uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-            <BarChart3 className="w-4 h-4 text-emerald-400" />
+          <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-300 flex items-center gap-1.5">
+            <BarChart3 className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
             Evolución y Rendimiento Visual
           </h3>
-          <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse"></span>
             En vivo
           </span>
           {filter.range === 'semana' && (
-            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-bold">
+            <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full font-bold">
               Lun → Dom
             </span>
           )}
           {filter.range === 'mes' && (
-            <span className="text-[10px] bg-sky-500/10 text-sky-400 px-2 py-0.5 rounded-full font-bold">
+            <span className="text-[10px] bg-sky-500/10 text-sky-600 dark:text-sky-400 px-2 py-0.5 rounded-full font-bold">
               Mes Completo
             </span>
           )}
@@ -169,15 +171,15 @@ export const ChartsSection: React.FC = () => {
         <div className="flex items-center gap-2 flex-wrap">
           {/* Selector de Granularidad Histórica si el filtro es histórico */}
           {filter.range === 'historico' && (
-            <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-xl border border-white/10 text-[11px]">
-              <span className="text-slate-500 px-1.5 flex items-center gap-1">
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-950 p-0.5 rounded-xl border border-slate-200/80 dark:border-white/10 text-[11px]">
+              <span className="text-slate-400 dark:text-slate-500 px-1.5 flex items-center gap-1">
                 <Calendar className="w-3 h-3" />
               </span>
               <button
                 type="button"
                 onClick={() => setHistoricalGranularity('dia')}
                 className={`px-2 py-1 rounded-lg font-bold transition-all ${
-                  historicalGranularity === 'dia' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  historicalGranularity === 'dia' ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-white' : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
                 }`}
               >
                 Día
@@ -186,7 +188,7 @@ export const ChartsSection: React.FC = () => {
                 type="button"
                 onClick={() => setHistoricalGranularity('semana')}
                 className={`px-2 py-1 rounded-lg font-bold transition-all ${
-                  historicalGranularity === 'semana' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  historicalGranularity === 'semana' ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-white' : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
                 }`}
               >
                 Semana
@@ -195,7 +197,7 @@ export const ChartsSection: React.FC = () => {
                 type="button"
                 onClick={() => setHistoricalGranularity('mes')}
                 className={`px-2 py-1 rounded-lg font-bold transition-all ${
-                  historicalGranularity === 'mes' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  historicalGranularity === 'mes' ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-white' : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
                 }`}
               >
                 Mes
@@ -204,13 +206,13 @@ export const ChartsSection: React.FC = () => {
           )}
 
           {/* Selector de pestañas de gráfico */}
-          <div className="flex gap-1 p-0.5 bg-slate-950 rounded-xl border border-white/10">
+          <div className="flex gap-1 p-0.5 bg-slate-100 dark:bg-slate-950 rounded-xl border border-slate-200/80 dark:border-white/10">
             <button
               onClick={() => setActiveChartTab('comparativo')}
               className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                 activeChartTab === 'comparativo'
-                  ? 'bg-slate-800 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200/60 dark:bg-slate-800 dark:text-white dark:border-transparent'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
               Comparativo
@@ -219,8 +221,8 @@ export const ChartsSection: React.FC = () => {
               onClick={() => setActiveChartTab('apilado')}
               className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                 activeChartTab === 'apilado'
-                  ? 'bg-slate-800 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200/60 dark:bg-slate-800 dark:text-white dark:border-transparent'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
               <span className="hidden sm:inline">Desglose </span>Apilado
@@ -229,8 +231,8 @@ export const ChartsSection: React.FC = () => {
               onClick={() => setActiveChartTab('gastos')}
               className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                 activeChartTab === 'gastos'
-                  ? 'bg-slate-800 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200/60 dark:bg-slate-800 dark:text-white dark:border-transparent'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
               Gastos
@@ -239,8 +241,8 @@ export const ChartsSection: React.FC = () => {
               onClick={() => setActiveChartTab('ingresos')}
               className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                 activeChartTab === 'ingresos'
-                  ? 'bg-slate-800 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200/60 dark:bg-slate-800 dark:text-white dark:border-transparent'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
               }`}
             >
               Ingresos
@@ -255,10 +257,11 @@ export const ChartsSection: React.FC = () => {
           {hasActivity ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart key={`bar-comp-${dataSignature}`} data={chartData} margin={{ top: 10, right: 5, left: -15, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} />
-                <XAxis dataKey="periodo" stroke="#64748b" fontSize={11} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#334155' : '#e2e8f0'} opacity={0.6} />
+                <XAxis dataKey="periodo" stroke={isDark ? '#64748b' : '#94a3b8'} tick={{ fill: isDark ? '#94a3b8' : '#64748b' }} fontSize={11} tickLine={false} />
                 <YAxis
-                  stroke="#64748b"
+                  stroke={isDark ? '#64748b' : '#94a3b8'}
+                  tick={{ fill: isDark ? '#94a3b8' : '#64748b' }}
                   fontSize={10}
                   tickFormatter={val => formatCurrencyCompact(val)}
                   tickLine={false}
@@ -277,8 +280,8 @@ export const ChartsSection: React.FC = () => {
             </ResponsiveContainer>
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-xs text-slate-500 gap-1.5 p-6 text-center">
-              <BarChart3 className="w-8 h-8 text-slate-600 stroke-1" />
-              <p className="font-semibold text-slate-400">Sin movimientos financieros en este período</p>
+              <BarChart3 className="w-8 h-8 text-slate-400 dark:text-slate-600 stroke-1" />
+              <p className="font-semibold text-slate-700 dark:text-slate-400">Sin movimientos financieros en este período</p>
               <p className="text-[11px] text-slate-500">Registra tus entregas, viajes o gastos de ruta para visualizar el comparativo.</p>
             </div>
           )}
@@ -291,10 +294,11 @@ export const ChartsSection: React.FC = () => {
           {hasActivity ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart key={`bar-stack-${dataSignature}`} data={chartData} margin={{ top: 10, right: 5, left: -15, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} />
-                <XAxis dataKey="periodo" stroke="#64748b" fontSize={11} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#334155' : '#e2e8f0'} opacity={0.6} />
+                <XAxis dataKey="periodo" stroke={isDark ? '#64748b' : '#94a3b8'} tick={{ fill: isDark ? '#94a3b8' : '#64748b' }} fontSize={11} tickLine={false} />
                 <YAxis
-                  stroke="#64748b"
+                  stroke={isDark ? '#64748b' : '#94a3b8'}
+                  tick={{ fill: isDark ? '#94a3b8' : '#64748b' }}
                   fontSize={10}
                   tickFormatter={val => formatCurrencyCompact(val)}
                   tickLine={false}
@@ -323,8 +327,8 @@ export const ChartsSection: React.FC = () => {
             </ResponsiveContainer>
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-xs text-slate-500 gap-1.5 p-6 text-center">
-              <Layers className="w-8 h-8 text-slate-600 stroke-1" />
-              <p className="font-semibold text-slate-400">Sin desglose apilado para este período</p>
+              <Layers className="w-8 h-8 text-slate-400 dark:text-slate-600 stroke-1" />
+              <p className="font-semibold text-slate-700 dark:text-slate-400">Sin desglose apilado para este período</p>
               <p className="text-[11px] text-slate-500">Agrega movimientos en el turno para ver las categorías apiladas.</p>
             </div>
           )}
@@ -368,8 +372,8 @@ export const ChartsSection: React.FC = () => {
                       className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                       style={{ backgroundColor: EXPENSE_COLORS[entry.name] || PIE_PALETTE[idx % PIE_PALETTE.length] }}
                     />
-                    <span className="text-slate-300 truncate">{entry.name}:</span>
-                    <span className="font-bold text-white ml-auto">{formatCurrency(entry.value)}</span>
+                    <span className="text-slate-600 dark:text-slate-300 truncate">{entry.name}:</span>
+                    <span className="font-bold text-slate-900 dark:text-white ml-auto">{formatCurrency(entry.value)}</span>
                   </div>
                 ))}
               </div>
@@ -416,8 +420,8 @@ export const ChartsSection: React.FC = () => {
                       className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                       style={{ backgroundColor: PIE_PALETTE[idx % PIE_PALETTE.length] }}
                     />
-                    <span className="text-slate-300 truncate">{entry.name}:</span>
-                    <span className="font-bold text-white ml-auto">{formatCurrency(entry.value)}</span>
+                    <span className="text-slate-600 dark:text-slate-300 truncate">{entry.name}:</span>
+                    <span className="font-bold text-slate-900 dark:text-white ml-auto">{formatCurrency(entry.value)}</span>
                   </div>
                 ))}
               </div>

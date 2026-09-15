@@ -50,13 +50,13 @@ export const CreditCardsSection: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Cabecera de Sección */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 border border-white/10 rounded-2xl p-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-100/90 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/10 rounded-2xl p-4 transition-colors">
         <div>
-          <h3 className="text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
-            <CreditCard className="w-4 h-4 text-purple-400" />
+          <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-purple-600 dark:text-purple-400" />
             Tarjetas de Crédito y Cuentas Revolventes
           </h3>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
             Monitorea el cupo utilizado, mantén la regla de oro del &lt;30% y evita la trampa del pago mínimo.
           </p>
         </div>
@@ -73,57 +73,57 @@ export const CreditCardsSection: React.FC = () => {
       {/* Tarjetas Resumen Global */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {/* Deuda Total Tarjetas */}
-        <div className="app-card rounded-2xl p-4 border-l-4 border-l-rose-500 shadow-md">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+        <div className="app-card rounded-2xl p-4 border-l-4 border-l-rose-500 shadow-sm">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             Deuda Total en Tarjetas
           </span>
-          <p className="text-2xl font-black text-rose-500 mt-1">
+          <p className="text-2xl font-black text-rose-600 dark:text-rose-500 mt-1">
             {formatCurrency(creditCardAnalysis.deudaTotalTarjetas)}
           </p>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-            Pago mínimo total: <b className="text-slate-300">{formatCurrency(creditCardAnalysis.pagoMinimoTotal)}</b>
+            Pago mínimo total: <b className="text-slate-800 dark:text-slate-300">{formatCurrency(creditCardAnalysis.pagoMinimoTotal)}</b>
           </p>
         </div>
 
         {/* Cupo Total Disponible */}
-        <div className="app-card rounded-2xl p-4 border-l-4 border-l-emerald-500 shadow-md">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+        <div className="app-card rounded-2xl p-4 border-l-4 border-l-emerald-500 shadow-sm">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             Cupo Total Disponible
           </span>
-          <p className="text-2xl font-black text-emerald-500 mt-1">
+          <p className="text-2xl font-black text-emerald-600 dark:text-emerald-500 mt-1">
             {formatCurrency(creditCardAnalysis.cupoDisponibleTotal)}
           </p>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-            Cupo global aprobado: <b className="text-slate-300">{formatCurrency(creditCardAnalysis.cupoTotalTarjetas)}</b>
+            Cupo global aprobado: <b className="text-slate-800 dark:text-slate-300">{formatCurrency(creditCardAnalysis.cupoTotalTarjetas)}</b>
           </p>
         </div>
 
         {/* Semáforo de Utilización */}
-        <div className="app-card rounded-2xl p-4 border-l-4 border-l-purple-500 shadow-md flex flex-col justify-between">
+        <div className="app-card rounded-2xl p-4 border-l-4 border-l-purple-500 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Semáforo de Utilización
               </span>
               <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md ${
                 creditCardAnalysis.semaforoUtilizacion === 'VERDE'
-                  ? 'bg-emerald-500/20 text-emerald-400'
+                  ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
                   : creditCardAnalysis.semaforoUtilizacion === 'AMARILLO'
-                  ? 'bg-amber-500/20 text-amber-400'
-                  : 'bg-rose-500/20 text-rose-400'
+                  ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                  : 'bg-rose-500/20 text-rose-600 dark:text-rose-400'
               }`}>
                 {creditCardAnalysis.semaforoUtilizacion === 'VERDE'
-                  ? '🟢 Saludable (&lt;30%)'
+                  ? '🟢 Saludable (<30%)'
                   : creditCardAnalysis.semaforoUtilizacion === 'AMARILLO'
                   ? '🟡 Precaución (30-60%)'
-                  : '🔴 Crítico (&gt;60%)'}
+                  : '🔴 Crítico (>60%)'}
               </span>
             </div>
-            <p className="text-2xl font-black text-white mt-1">
+            <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">
               {creditCardAnalysis.utilizacionGlobalPct}%
             </p>
           </div>
-          <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden mt-2">
+          <div className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mt-2">
             <div
               style={{ width: `${Math.min(100, creditCardAnalysis.utilizacionGlobalPct)}%` }}
               className={`h-full ${
@@ -139,13 +139,13 @@ export const CreditCardsSection: React.FC = () => {
       </div>
 
       {/* Advertencia Educativa del Pago Mínimo */}
-      <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2.5">
-        <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+      <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-2.5">
+        <AlertTriangle className="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" />
         <div className="space-y-0.5">
-          <p className="font-bold text-amber-300">
+          <p className="font-bold text-amber-800 dark:text-amber-300">
             Regla de oro financiera: El pago mínimo no reduce tu deuda
           </p>
-          <p className="text-slate-300 text-[11px] leading-relaxed">
+          <p className="text-slate-700 dark:text-slate-300 text-[11px] leading-relaxed">
             {creditCardAnalysis.advertenciaPagoMinimo} Siempre que tus ingresos en ruta lo permitan, realiza abonos a capital o paga el saldo total para no regalar tus ganancias al interés bancario.
           </p>
         </div>
@@ -153,33 +153,33 @@ export const CreditCardsSection: React.FC = () => {
 
       {/* Próximos Vencimientos Reales (Regla 7) */}
       {creditCards.length > 0 && (
-        <div className="p-4 rounded-2xl bg-slate-900/90 border border-purple-500/20 space-y-2">
+        <div className="p-4 rounded-2xl bg-slate-100/90 dark:bg-slate-900/90 border border-purple-500/20 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-purple-400" />
+            <span className="text-xs font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+              <Calendar className="w-4 h-4 text-purple-600 dark:text-purple-400" />
               Próximos Vencimientos Reales de Tarjetas
             </span>
-            <span className="text-[11px] text-slate-400">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">
               Basado en la fecha límite real de cada entidad
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-xs">
-            <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5 flex items-center justify-between">
-              <span className="text-slate-400">Próximos 7 días:</span>
-              <b className={creditCardAnalysis.vencenEn7Dias.length > 0 ? 'text-amber-400 font-black' : 'text-slate-400'}>
+            <div className="p-2.5 rounded-xl bg-white dark:bg-slate-950/60 border border-slate-200/80 dark:border-white/5 flex items-center justify-between">
+              <span className="text-slate-500 dark:text-slate-400">Próximos 7 días:</span>
+              <b className={creditCardAnalysis.vencenEn7Dias.length > 0 ? 'text-amber-600 dark:text-amber-400 font-black' : 'text-slate-500 dark:text-slate-400'}>
                 {creditCardAnalysis.vencenEn7Dias.length} {creditCardAnalysis.vencenEn7Dias.length === 1 ? 'tarjeta' : 'tarjetas'}
               </b>
             </div>
-            <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5 flex items-center justify-between">
-              <span className="text-slate-400">Próximos 15 días:</span>
-              <b className="text-slate-200 font-black">
+            <div className="p-2.5 rounded-xl bg-white dark:bg-slate-950/60 border border-slate-200/80 dark:border-white/5 flex items-center justify-between">
+              <span className="text-slate-500 dark:text-slate-400">Próximos 15 días:</span>
+              <b className="text-slate-800 dark:text-slate-200 font-black">
                 {creditCardAnalysis.vencenEn15Dias.length} {creditCardAnalysis.vencenEn15Dias.length === 1 ? 'tarjeta' : 'tarjetas'}
               </b>
             </div>
-            <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/5 flex items-center justify-between">
-              <span className="text-slate-400">Este mes calendario:</span>
-              <b className="text-purple-400 font-black">
+            <div className="p-2.5 rounded-xl bg-white dark:bg-slate-950/60 border border-slate-200/80 dark:border-white/5 flex items-center justify-between">
+              <span className="text-slate-500 dark:text-slate-400">Este mes calendario:</span>
+              <b className="text-purple-600 dark:text-purple-400 font-black">
                 {creditCardAnalysis.vencenEsteMes.length} {creditCardAnalysis.vencenEsteMes.length === 1 ? 'tarjeta' : 'tarjetas'}
               </b>
             </div>
@@ -202,17 +202,17 @@ export const CreditCardsSection: React.FC = () => {
             return (
               <div
                 key={card.id}
-                className="app-card rounded-3xl p-5 shadow-lg border border-white/10 relative overflow-hidden flex flex-col justify-between space-y-4 bg-gradient-to-br from-slate-900 via-slate-900/90 to-slate-950"
+                className="app-card rounded-3xl p-5 shadow-sm dark:shadow-lg border border-slate-200 dark:border-white/10 relative overflow-hidden flex flex-col justify-between space-y-4 bg-white dark:bg-gradient-to-br dark:from-slate-900 dark:via-slate-900/90 dark:to-slate-950"
               >
                 {/* Header de la tarjeta */}
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center font-black text-xs">
+                    <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center font-black text-xs">
                       💳
                     </div>
                     <div>
-                      <h4 className="font-black text-sm text-white">{card.nombre}</h4>
-                      <p className="text-[11px] text-slate-400">
+                      <h4 className="font-black text-sm text-slate-900 dark:text-white">{card.nombre}</h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
                         {card.bancoEntidad || 'Tarjeta de Crédito'}
                         {card.ultimosDigitos ? ` •••• ${card.ultimosDigitos}` : ''}
                       </p>
@@ -222,7 +222,7 @@ export const CreditCardsSection: React.FC = () => {
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => handleOpenEdit(card)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
                       title="Editar"
                     >
                       <Pencil className="w-3.5 h-3.5" />
@@ -233,7 +233,7 @@ export const CreditCardsSection: React.FC = () => {
                           deleteCreditCard(card.id);
                         }
                       }}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
                       title="Eliminar"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -244,12 +244,12 @@ export const CreditCardsSection: React.FC = () => {
                 {/* Barra y % de Utilización */}
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-xs font-bold">
-                    <span className="text-slate-400 text-[11px]">Uso del cupo:</span>
-                    <span className={isRed ? 'text-rose-400' : isYellow ? 'text-amber-400' : 'text-emerald-400'}>
+                    <span className="text-slate-500 dark:text-slate-400 text-[11px]">Uso del cupo:</span>
+                    <span className={isRed ? 'text-rose-600 dark:text-rose-400' : isYellow ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}>
                       {utilPct}% {utilPct > 30 ? (isRed ? '(Crítico >60%)' : '(Alerta >30%)') : '(Óptimo)'}
                     </span>
                   </div>
-                  <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-white/5">
+                  <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-950 rounded-full overflow-hidden border border-slate-200 dark:border-white/5">
                     <div
                       style={{ width: `${Math.min(100, utilPct)}%` }}
                       className={`h-full transition-all duration-300 ${
@@ -260,44 +260,44 @@ export const CreditCardsSection: React.FC = () => {
                 </div>
 
                 {/* Métricas de Saldo */}
-                <div className="grid grid-cols-2 gap-2 p-3 rounded-2xl bg-white/5 border border-white/5 text-xs">
+                <div className="grid grid-cols-2 gap-2 p-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/5 text-xs">
                   <div>
-                    <span className="text-[10px] text-slate-400 block font-medium">Deuda / Saldo:</span>
-                    <b className="text-rose-400 font-black text-sm block mt-0.5">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Deuda / Saldo:</span>
+                    <b className="text-rose-600 dark:text-rose-400 font-black text-sm block mt-0.5">
                       {formatCurrency(deuda)}
                     </b>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 block font-medium">Cupo Libre:</span>
-                    <b className="text-emerald-400 font-black text-sm block mt-0.5">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Cupo Libre:</span>
+                    <b className="text-emerald-600 dark:text-emerald-400 font-black text-sm block mt-0.5">
                       {formatCurrency(disponible)}
                     </b>
                   </div>
                 </div>
 
                 {/* Fechas de corte y pago real */}
-                <div className="pt-2 border-t border-white/5 grid grid-cols-2 gap-2 text-[11px] text-slate-300">
+                <div className="pt-2 border-t border-slate-100 dark:border-white/5 grid grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-300">
                   <div className="flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+                    <Calendar className="w-3.5 h-3.5 text-cyan-500 dark:text-cyan-400" />
                     <span>Corte: <b>Día {card.fechaCorte}</b></span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                    <Calendar className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
                     <span>Límite real: <b>Día {card.fechaPago}</b></span>
                   </div>
                 </div>
 
                 {/* Distinción: Pago Mínimo vs Saldo Total para No Generar Intereses (Regla 13) */}
-                <div className="pt-2 border-t border-white/5 space-y-1 text-xs">
+                <div className="pt-2 border-t border-slate-100 dark:border-white/5 space-y-1 text-xs">
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-400">Pago mínimo sugerido:</span>
-                    <b className="text-amber-300 font-black">
+                    <span className="text-slate-500 dark:text-slate-400">Pago mínimo sugerido:</span>
+                    <b className="text-amber-600 dark:text-amber-300 font-black">
                       {card.pagoMinimo > 0 ? formatCurrency(card.pagoMinimo) : 'Sin mínimo configurado'}
                     </b>
                   </div>
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-400">Pago total (evitar intereses):</span>
-                    <b className="text-emerald-400 font-black">
+                    <span className="text-slate-500 dark:text-slate-400">Pago total (evitar intereses):</span>
+                    <b className="text-emerald-600 dark:text-emerald-400 font-black">
                       {formatCurrency(card.pagoTotalEsperado || card.saldoUtilizado)}
                     </b>
                   </div>
@@ -307,12 +307,12 @@ export const CreditCardsSection: React.FC = () => {
           })}
         </div>
       ) : (
-        <div className="app-card rounded-3xl p-8 text-center border border-white/10 space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-purple-500/20 text-purple-400 flex items-center justify-center mx-auto text-xl">
+        <div className="app-card rounded-3xl p-8 text-center border border-slate-200 dark:border-white/10 space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center mx-auto text-xl">
             💳
           </div>
-          <h4 className="text-sm font-bold text-white">No has registrado tarjetas de crédito</h4>
-          <p className="text-xs text-slate-400 max-w-md mx-auto">
+          <h4 className="text-sm font-bold text-slate-900 dark:text-white">No has registrado tarjetas de crédito</h4>
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
             Registra tus tarjetas para saber con exactitud cuánto debes, cuánto cupo te queda disponible y recibir recomendaciones para liquidar deuda de alto interés.
           </p>
           <button

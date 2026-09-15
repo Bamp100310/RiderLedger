@@ -31,11 +31,11 @@ const AppLayout: React.FC = () => {
             className="fixed inset-0 bg-black/60 backdrop-blur-xs"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="relative z-10 w-72 h-full bg-[#1e2638] shadow-2xl flex flex-col">
+          <div className="relative z-10 w-72 h-full bg-white dark:bg-[#161e2e] shadow-2xl flex flex-col border-r border-slate-200 dark:border-white/5">
             <div className="p-3 flex justify-end">
               <button
                 onClick={() => setMobileMenuOpen(false)}
-                className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
+                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
               >
                 <X className="w-5 h-5" />
               </button>

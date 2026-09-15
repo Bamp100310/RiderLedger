@@ -4,12 +4,13 @@
 
 @layer base {
   :root {
-    --bg-page: #f1f5f9;
+    --bg-page: #f8fafc;
     --bg-card: #ffffff;
     --text-primary: #0f172a;
     --text-secondary: #475569;
     --border-color: #e2e8f0;
-    --sidebar-bg: #1e2638;
+    --sidebar-bg: #ffffff;
+    --sidebar-border: #e2e8f0;
     --accent-cyan: #0284c7;
   }
 
@@ -20,6 +21,7 @@
     --text-secondary: #94a3b8;
     --border-color: rgba(255, 255, 255, 0.08);
     --sidebar-bg: #161e2e;
+    --sidebar-border: rgba(255, 255, 255, 0.05);
     --accent-cyan: #00a8cc;
   }
 

@@ -24,19 +24,19 @@ export const QuickActionDrawer: React.FC = () => {
       <div className="fixed inset-0" onClick={closeDrawer} />
 
       {/* Drawer Container */}
-      <div className="relative z-10 w-full max-w-lg bg-slate-900 border-t border-white/10 rounded-t-3xl shadow-2xl p-4 safe-bottom max-h-[92vh] flex flex-col">
+      <div className="relative z-10 w-full max-w-lg bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/10 rounded-t-3xl shadow-2xl p-4 safe-bottom max-h-[92vh] flex flex-col transition-colors">
         {/* Grab Handle */}
-        <div className="w-12 h-1.5 bg-slate-700 rounded-full mx-auto mb-3" />
+        <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto mb-3" />
 
         {/* Drawer Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-white/10">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/10">
           <div>
-            <h3 className="text-base font-black text-white tracking-tight">Registro Rápido</h3>
-            <p className="text-[11px] text-slate-400">Guarda en ruta sin perder conexión</p>
+            <h3 className="text-base font-black text-slate-900 dark:text-white tracking-tight">Registro Rápido</h3>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">Guarda en ruta sin perder conexión</p>
           </div>
           <button
             onClick={closeDrawer}
-            className="p-1.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -53,8 +53,8 @@ export const QuickActionDrawer: React.FC = () => {
                 onClick={() => openDrawer(tab.id)}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${
                   isActive
-                    ? 'bg-slate-800 text-white border-white/20 shadow-md shadow-black/30'
-                    : 'bg-slate-950/60 text-slate-400 border-white/5 hover:bg-slate-850'
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-sm dark:bg-slate-800 dark:border-white/20 dark:shadow-md'
+                    : 'bg-slate-100 text-slate-600 border-slate-200/80 hover:bg-slate-200 dark:bg-slate-950/60 dark:text-slate-400 dark:border-white/5 dark:hover:bg-slate-850'
                 }`}
               >
                 <Icon className={`w-3.5 h-3.5 ${tab.color}`} />
